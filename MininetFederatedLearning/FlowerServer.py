@@ -1,8 +1,10 @@
 import logging
-from typing import List, Tuple
+import time
+from typing import List, Tuple, Union, Optional, Dict
 import argparse
 import flwr as fl
-from flwr.common import Metrics
+from flwr.common import Metrics, FitRes, Parameters, Scalar
+from flwr.server.client_proxy import ClientProxy
 
 
 def weighted_average(metrics: List[Tuple[int, Metrics]]) -> Metrics:
@@ -40,7 +42,7 @@ def main():
 
     # Start Flower server
     history = fl.server.start_server(
-        server_address="10.0.0.100:8080",
+        server_address=args.server_address,
         config=fl.server.ServerConfig(num_rounds=args.rounds),
         strategy=strategy,
         grpc_max_concurrent_workers=args.num_clients
@@ -59,11 +61,13 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--rounds", type=int, default=2)
     parser.add_argument("-c", "--num-clients", type=int, default=2)
     parser.add_argument("-b", "--batch-size", type=int, default=2)
-    parser.add_argument("--server_address", type=str, default="10.0.0.10:8080")
+    parser.add_argument("--server-address", type=str, default="10.0.0.100:8080")
+    parser.add_argument("--log-path", type=str)
     args = parser.parse_args()
     logging.basicConfig(
-        filename=f'logs/{args.dataset}/server.log',  # Log file name
-        level=logging.DEBUG,  # Minimum log level to capture (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        format='%(message)s'  # Log message format
+        filename=f'{args.log_path}/server.log',
+        level=logging.DEBUG,
+        format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s",
+        datefmt='%H:%M:%S',
     )
     main()

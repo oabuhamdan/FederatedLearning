@@ -1,5 +1,6 @@
 import argparse
 import logging
+import time
 from collections import OrderedDict
 
 import flwr as fl
@@ -39,13 +40,17 @@ class Net(nn.Module):
 def train(net, trainloader, optimizer, epochs, device):
     """Train the model on the training set."""
     criterion = torch.nn.CrossEntropyLoss()
-    for _ in range(epochs):
+    for epoch in range(epochs):
+        step = 0
         for batch in tqdm(trainloader):
+            step += 1
             batch = list(batch.values())
             images, labels = batch[0], batch[1]
             optimizer.zero_grad()
             criterion(net(images.to(device)), labels.to(device)).backward()
             optimizer.step()
+            if step % 100 == 0:
+                logging.info(f"Step {step} Epoch {epoch}")
 
 
 def test(net, testloader, device):
@@ -135,7 +140,7 @@ def get_dataset():
         return batch
 
     # Define the transforms
-    partition = DatasetDict.load_from_disk(f"data/{args.dataset}/client_{args.cid % 25}_data")
+    partition = DatasetDict.load_from_disk(f"data/{args.dataset}/client_{args.cid}_data")
     partition = partition.with_transform(apply_transforms)
     return partition["train"], partition["test"]
 
@@ -158,10 +163,12 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--dataset", type=str, default="cifar10")
     parser.add_argument("-c", "--cid", type=int)
     parser.add_argument("--server-address", type=str, default="10.0.0.100:8080")
+    parser.add_argument("--log-path", type=str)
     args = parser.parse_args()
     logging.basicConfig(
-        filename=f'logs/{args.dataset}/client_{args.cid}.log',  # Log file name
+        filename=f'{args.log_path}/client_{args.cid}.log',  # Log file name
         level=logging.INFO,  # Minimum log level to capture (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        format='%(message)s'  # Log message format
+        format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s",
+        datefmt='%H:%M:%S',
     )
     main()
