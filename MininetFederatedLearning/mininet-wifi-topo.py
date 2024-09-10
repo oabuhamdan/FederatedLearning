@@ -2,14 +2,14 @@
 import os
 import time
 
+from mininet.cli import CLI
+from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.node import RemoteController
+from mn_wifi.link import wmediumd, _4address
 from mn_wifi.net import Mininet_wifi
-from mn_wifi.node import Station, OVSKernelAP
-from mn_wifi.cli import CLI
-from mn_wifi.link import wmediumd, mesh
+from mn_wifi.node import OVSKernelAP
 from mn_wifi.wmediumdConnector import interference
-from subprocess import call
 
 DATASET = "cifar10"
 ROUNDS = 5
@@ -19,22 +19,28 @@ LOG_PATH = f"logs/wifi_exp_{DATASET}_{time.strftime('%H_%M')}"
 
 
 def myNetwork():
-    controller = RemoteController('c0', ip='172.17.0.2', port=6653)
-    net = Mininet_wifi(controller=controller, link=wmediumd, wmediumd_mode=interference, autoSetMacs=True)
+    net = Mininet_wifi(link=wmediumd, wmediumd_mode=interference, autoSetMacs=True, config4addr=True,
+                       ipBase='10.0.0.0/8')
 
-    ap_configs = dict(protocols="OpenFlow13", channel=1, mode='g', cls=OVSKernelAP, range=500, wlans=2)
-    ap1 = net.addAccessPoint('ap1', ssid='mesh-ssid', position='672.0,389.0,0', **ap_configs)
-    ap2 = net.addAccessPoint('ap2', ssid='mesh-ssid', position='1120.0,391.0,0', **ap_configs)
-    ap3 = net.addAccessPoint('ap3', ssid='mesh-ssid', position='894.0,745.0,0', **ap_configs)
-    aps = [ap1, ap2, ap3]
+    info('*** Adding controller\n')
+    controller = net.addController(name='c0', controller=RemoteController, ip='172.17.0.2', protocol='tcp', port=6653)
+
+    info('*** Add switches/APs\n')
+    ap_configs = dict(protocols="OpenFlow13", cls=OVSKernelAP, channel='1', mode='g', range=500, wlans=3)
+    info('*** Add switches/APs\n')
+    ap1 = net.addAccessPoint('ap1', ssid='ap1-ssid', position='511.0,280.0,0', **ap_configs)
+    ap2 = net.addAccessPoint('ap2', ssid='ap2-ssid', position='876.0,285.0,0', **ap_configs)
+    ap3 = net.addAccessPoint('ap3', ssid='ap3-ssid', position='879.0,635.0,0', **ap_configs)
+    ap4 = net.addAccessPoint('ap4', ssid='ap4-ssid', position='507.0,623.0,0', **ap_configs)
+    aps = [ap1, ap2, ap3, ap4]
+
     info('*** Add hosts/stations\n')
-
-    sta1 = net.addStation('sta1', ip='10.0.0.1', position='503.0,-11.0,0', range=120)
-    sta2 = net.addStation('sta2', ip='10.0.0.2', position='228.0,444.0,0', range=120)
-    sta3 = net.addStation('sta3', ip='10.0.0.3', position='1364.0,22.0,0', range=120)
-    sta4 = net.addStation('sta4', ip='10.0.0.4', position='1554.0,532.0,0', range=120)
-    sta5 = net.addStation('sta5', ip='10.0.0.5', position='1218.0,1070.0,0', range=120)
-    sta6 = net.addStation('sta6', ip='10.0.0.6', position='609.0,1085.0,0', range=120)
+    server = net.addHost('server', ip='10.0.0.100')
+    sta1 = net.addStation('sta1', ip='10.0.0.1', position='219.0,93.0,0', range=150)
+    sta2 = net.addStation('sta2', ip='10.0.0.2', position='1171.0,97.0,0', range=150)
+    sta3 = net.addStation('sta3', ip='10.0.0.3', position='1139.0,860.0,0', range=150)
+    sta4 = net.addStation('sta4', ip='10.0.0.4', position='255.0,819.0,0', range=150)
+    stas = [sta1, sta2, sta3, sta4]
 
     info("*** Configuring Propagation Model\n")
     net.setPropagationModel(model="logDistance", exp=3)
@@ -42,30 +48,30 @@ def myNetwork():
     info("*** Configuring wifi nodes\n")
     net.configureWifiNodes()
 
-    for ap in aps:
-        mesh_intf = f"{ap}-wlan2"
-        ap.cmd(f"ip link set {mesh_intf} down")
-        ap.cmd(f"iw dev {mesh_intf} set type mp")
-        ap.cmd(f"ip link set {mesh_intf} up")
-        ap.cmd(f'iw dev {mesh_intf} mesh join mesh-ssid')
-        # ap.cmd(f"ip addr add 10.0.0.9{i}/24 dev {mesh_intf}")
+    net.addLink(ap1, ap2, cls=_4address, port1=1, port2=1)
+    net.addLink(ap2, ap3, cls=_4address, port1=2, port2=1)
+    net.addLink(ap3, ap4, cls=_4address, port1=2, port2=1)
+    net.addLink(ap4, ap1, cls=_4address, port1=2, port2=2)
+    net.addLink(server, ap1, cls=TCLink, bw=1000)
 
-    net.plotGraph(min_x=-500, min_y=-500, max_x=2000, max_y=2000)
+    info('*** Add links\n')
+
+    net.plotGraph(max_x=1500, max_y=1500)
 
     info('*** Starting network\n')
     net.build()
     info('*** Starting controllers\n')
-
-    controller.start()
+    for controller in net.controllers:
+        controller.start()
 
     info('*** Starting switches/APs\n')
     for ap in aps:
         ap.start([controller])
 
-    # CLI(net)
-    net.pingAll()
-    total_time = run_exp([sta2, sta3, sta4, sta5, sta6], sta1)
-    print(total_time)
+    CLI(net)
+    # net.pingAll()
+    # total_time = run_exp(stas, server)
+    # print(total_time)
     net.stop()
 
 
