@@ -36,7 +36,7 @@ def get_info(file_path):
     return info
 
 
-def plot_fl_task_times(info):
+def plot_fl_task_times(info, title):
     num_rounds = len(info)
     num_clients = len(info['Round-0'])
     bar_width = 0.8
@@ -72,7 +72,7 @@ def plot_fl_task_times(info):
     # Set x-ticks and labels
     x_ticks = np.arange(num_clients / 2, num_rounds * (num_clients + space_between_rounds) - space_between_rounds,
                         num_clients + space_between_rounds)
-    # y_ticks = list(range())
+
     ax.set_xticks(x_ticks)
     ax.set_xticklabels([f'Round {i}' for i in range(num_rounds)], fontsize=20)
 
@@ -83,9 +83,11 @@ def plot_fl_task_times(info):
     ax.grid(axis='y', linestyle='--', alpha=0.7)
     plt.yticks(fontsize=20)
 
-    plt.tight_layout()
+    # plt.tight_layout()
+    plt.title(title, fontsize=20)
     plt.show()
 
 
-info = get_info("logs/fwd_resnet18_5rounds_10hosts_without_bg/server.log")
-plot_fl_task_times(info)
+file_title = "fwd_resnet18_5rounds_10hosts_with_bg"
+info = get_info(f"logs/{file_title}/server.log")
+plot_fl_task_times(info, file_title)
