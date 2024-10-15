@@ -11,9 +11,10 @@ import random as py_random
 import threading
 
 DATASET = "cifar10"
-ROUNDS = 10
+ROUNDS = 5
 EPOCHS = 1
-BATCH_SIZE = 16
+BATCH_SIZE = 32
+
 
 class MyMininet(Mininet):
     def __init__(self, *args, **kwargs):
@@ -27,10 +28,14 @@ class MyMininet(Mininet):
         self.fl_clients = fl_clients
         self.bg_hosts = bg_hosts
 
-    def start_experiment(self, log_dir):
-        threading.Thread(target=self.start_bg_traffic, args=(log_dir,), daemon=True).start()
+    def start_experiment(self, log_dir, bg_traffic):
+        if bg_traffic:
+            threading.Thread(target=self.start_bg_traffic, args=(log_dir,), daemon=True).start()
         self.run_exp(self.fl_clients, self.fl_server, log_dir)
         [host.cmd("pkill -f 'iperf3'") for host in self.fl_clients]
+        self.fl_server.cmd("pkill -f 'network_stats.sh'")
+        [client.cmd("pkill -f 'network_stats.sh'") for client in self.fl_clients]
+        self.fl_server.cmd("killall bash")
 
     def run_exp(self, stations, server, log_dir):
         log_path = f"logs/{log_dir}/"
@@ -41,14 +46,14 @@ class MyMininet(Mininet):
 
         server.cmd(f"./network_stats.sh {serv_inf} 1 {log_path}/server_network.csv > /dev/null 2>&1 &")
         server.sendCmd(
-            f"source ../venv/bin/activate && python FlowerServer.py --dataset {DATASET}"
+            f"source .venv/bin/activate && python FlowerServer.py --dataset {DATASET}"
             f" --num-clients {len(stations)} --rounds {ROUNDS} --server-address {server_addr}"
             f" --epochs {EPOCHS} --batch-size {BATCH_SIZE} --log-path {log_path}"
         )
         for i, sta in enumerate(stations):
             cmd = (f"python FlowerClient.py --cid {i} --dataset {DATASET} --log-path {log_path} "
                    f"--server-address {server_addr}")
-            sta.cmd(f"source ../venv/bin/activate && {cmd} > /dev/null 2>&1 &")
+            sta.cmd(f"source .venv/bin/activate && {cmd} > /dev/null 2>&1 &")
             inf = sta.defaultIntf()
             sta.cmd(f"./network_stats.sh {inf} 1 {log_path}/client_{i}_network.csv > /dev/null 2>&1 &")
 
@@ -64,10 +69,10 @@ class MyMininet(Mininet):
         log_path = f"logs/{log_dir}/iperf_logs"
         os.makedirs(log_path, exist_ok=True)
         time.sleep(10)
-        for i in range(50):
+        for i in range(10):
             src, dst = py_random.sample(self.bg_hosts, 2)
-            traffic_size = int(np_random.normal(500, 300))
-            bandwidth = int(np_random.normal(50, 25))
+            traffic_size = int(np_random.normal(500, 100))
+            bandwidth = int(np_random.normal(20, 5))
             port = py_random.randint(9090, 9990)
 
             dst.cmd(f'iperf3 -s --daemon --one-off -p {port} > /dev/null &')
@@ -106,13 +111,13 @@ def create_topology():
 
     hcount = len(fl_clients)
     # Add background (non-FL) clients
-    bg_clients = [net.addHost(f'bgclient{i + 1}', mac="aa" + int_to_mac(hcount + i)[-10:]) for i in range(10)]
+    bg_clients = [net.addHost(f'bgclient{i + 1}', mac="aa" + int_to_mac(hcount + i)[-10:]) for i in range(5)]
 
     # Connect FL server to core switches
     net.addLink(fl_server, net.getNodeByName("c1"), bw=1000)
 
     # Connect core switches to each other
-    net.addLink(core_switches[0], core_switches[1], bw=1000)
+    net.addLink(core_switches[0], core_switches[1], bw=100)
 
     # Connect core switches to aggregation switches
     for c_switch in core_switches:
@@ -128,9 +133,6 @@ def create_topology():
     for i, client in enumerate(fl_clients):
         switch = edge_switches[i % len(edge_switches)]
         net.addLink(client, switch, bw=100)
-        # Add redundant connection to another random edge switch
-        # second_switch = edge_switches[(i + 3) % len(edge_switches)]
-        # net.addLink(client, second_switch)
 
     # Connect background clients to edge switches
     for i, client in enumerate(bg_clients):
