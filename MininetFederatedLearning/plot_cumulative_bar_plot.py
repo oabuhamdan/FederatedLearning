@@ -22,8 +22,8 @@ def get_info(file_path):
         for client_info in flround:
             client_info = client_info[1]
             client = client_info["client"]
-            round_start_time = client_info["round_start_time"]
-            round_finish_time = client_info["round_finish_time"]
+            round_start_time = client_info["client_round_start_time"]
+            round_finish_time = client_info["client_round_finish_time"]
             computing_start_time = client_info["computing_start_time"]
             computing_finish_time = client_info["computing_finish_time"]
             total_computing_time = computing_finish_time - computing_start_time
@@ -53,7 +53,7 @@ def plot_fl_task_times(info, title):
             client_data = info[round_key][client_key]
 
             server_to_client = client_data['server_to_client_time']
-            computing_time = client_data['total_computing_time']
+            computing_time = 0.1#client_data['total_computing_time']
             client_to_server = client_data['client_to_server_time']
 
             bottom = 0
@@ -74,7 +74,7 @@ def plot_fl_task_times(info, title):
                         num_clients + space_between_rounds)
 
     ax.set_xticks(x_ticks)
-    ax.set_xticklabels([f'Round {i}' for i in range(num_rounds)], fontsize=20)
+    ax.set_xticklabels([f'Round {i + 1}' for i in range(num_rounds)], fontsize=20)
 
     # Add legend
     ax.legend(['Server to Client', 'Client Computing', 'Client to Server'], fontsize=20)
@@ -88,6 +88,6 @@ def plot_fl_task_times(info, title):
     plt.show()
 
 
-file_title = "fwd_resnet18_5rounds_10hosts_with_bg"
+file_title = "flowsched2_mnlarge_5rounds_10hosts_with_bg"
 info = get_info(f"logs/{file_title}/server.log")
 plot_fl_task_times(info, file_title)
