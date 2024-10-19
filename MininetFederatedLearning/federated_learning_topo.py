@@ -1,10 +1,10 @@
+import random
 import time
 import os
-
 from mininet.cli import CLI
-from mininet.link import TCLink
+# from mininet.link import TCLink
 from mininet.log import setLogLevel, info
-from mininet.net import Mininet
+from mininet.net import Containernet
 from mininet.node import OVSSwitch, RemoteController
 from mininet.topo import Topo
 from numpy import random as np_random
@@ -13,17 +13,38 @@ import threading
 import math
 
 DATASET = "cifar10"
-ROUNDS = 5
+ROUNDS = 3
 EPOCHS = 1
-BATCH_SIZE = 32
+BATCH_SIZE = 16
+containernet_kwargs = {
+    "volumes": [
+        "/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/logs:/app/logs",
+        "/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/data:/app/data",
+    ],
+    "dimage": "fl_mininet_image:latest",
+    "network_mode": "none",
+}
 
 
-class MyMininet(Mininet):
+def get_host_limitation():
+    py_random.seed(43)
+    limits = py_random.choice([(256, 0.4), (512, 0.5), (1024, 0.6)])
+    limits = {
+        "mem_limit": f"{limits[0]}m",
+        "memswap_limit": f"{limits[0] * 2}m",
+        "cpu_period": 100000,
+        "cpu_quota": int(limits[1] * 100000),
+    }
+    return limits
+
+
+class MyMininet(Containernet):
     def __init__(self, *args, **kwargs):
-        Mininet.__init__(self, *args, **kwargs)
+        Containernet.__init__(self, *args, **kwargs)
         self.fl_server = None
         self.fl_clients = []
         self.bg_hosts = []
+        self.stop_event = threading.Event()  # Create a stop event
 
     def setup_exp(self, fl_server, fl_clients, bg_hosts):
         self.fl_server = fl_server
@@ -31,13 +52,14 @@ class MyMininet(Mininet):
         self.bg_hosts = bg_hosts
 
     def start_experiment(self, log_dir, bg_traffic):
+        self.stop_event.clear()
         if bg_traffic:
-            threading.Thread(target=self.start_bg_traffic, args=(log_dir,), daemon=True).start()
+            thread = threading.Thread(target=self.start_bg_traffic, args=(log_dir,), daemon=True)
+            thread.start()
         self.run_exp(self.fl_clients, self.fl_server, log_dir)
-        [host.cmd("pkill -f 'iperf3'") for host in self.fl_clients]
-        self.fl_server.cmd("pkill -f 'network_stats.sh'")
-        [client.cmd("pkill -f 'network_stats.sh'") for client in self.fl_clients]
-        self.fl_server.cmd("killall bash")
+        self.stop_event.set()
+        [host.cmd("pkill -f 'iperf3'") for host in self.bg_hosts]
+        [host.cmd("pkill -f 'network_stats.sh'") for host in self.fl_clients]
 
     def run_exp(self, stations, server, log_dir):
         log_path = f"logs/{log_dir}/"
@@ -48,41 +70,41 @@ class MyMininet(Mininet):
 
         server.cmd(f"./network_stats.sh {serv_inf} 1 {log_path}/server_network.csv > /dev/null 2>&1 &")
         server.sendCmd(
-            f"source .venv/bin/activate && python FlowerServer.py --dataset {DATASET}"
+            f"source venv/bin/activate && python FlowerServer.py --dataset {DATASET}"
             f" --num-clients {len(stations)} --rounds {ROUNDS} --server-address {server_addr}"
             f" --epochs {EPOCHS} --batch-size {BATCH_SIZE} --log-path {log_path}"
         )
         for i, sta in enumerate(stations):
             cmd = (f"python FlowerClient.py --cid {i} --dataset {DATASET} --log-path {log_path} "
                    f"--server-address {server_addr}")
-            sta.cmd(f"source .venv/bin/activate && {cmd} > /dev/null 2>&1 &")
+            sta.cmd(f"source venv/bin/activate && {cmd} > /dev/null 2>&1 &")
             inf = sta.defaultIntf()
             sta.cmd(f"./network_stats.sh {inf} 1 {log_path}/client_{i}_network.csv > /dev/null 2>&1 &")
 
         server.waitOutput(verbose=True)
 
-        server.cmd("pkill -f 'network_stats.sh'")
-        [sta.cmd("pkill -f 'network_stats.sh'") for sta in stations]
-
     def start_bg_traffic(self, log_dir):
         py_random.seed(43)
         np_random.seed(43)
-
         log_path = f"logs/{log_dir}/iperf_logs"
         os.makedirs(log_path, exist_ok=True)
+        iperf_logs = open(log_path + "/iperf_logs.txt", "w")
         time.sleep(10)
-        for i in range(10):
+        for i in range(50):
+            if self.stop_event.is_set():
+                break
             src, dst = py_random.sample(self.bg_hosts, 2)
             traffic_size = int(np_random.normal(500, 100))
-            bandwidth = int(np_random.normal(20, 5))
+            bandwidth = int(np_random.normal(30, 10))
             port = py_random.randint(9090, 9990)
-
+            iperf_logs.write(f"From {src} to {dst} with Traffic Size {traffic_size} and Bandwidth {bandwidth}\n")
             dst.cmd(f'iperf3 -s --daemon --one-off -p {port} > /dev/null &')
             time.sleep(1)
             src.cmd(f'iperf3 -c {dst.IP()} -b {bandwidth}M -n {traffic_size}M -p {port} '
                     f'--logfile {log_path}/{port}_logs.txt > /dev/null &')
-            time.sleep(10)
-        print("~ Generated 30 flows ~")
+            time.sleep(py_random.randint(1, 10))
+        iperf_logs.close()
+        print("~ Generated 50 flows ~")
 
 
 def build_topology(net, core_count, agg_count, edge_count, fl_client_count, bg_client_count):
@@ -100,15 +122,24 @@ def build_topology(net, core_count, agg_count, edge_count, fl_client_count, bg_c
 
     edge_switches = [net.addSwitch(f'e{i + 1}', dpid=str(scount + i), **switch_config) for i in range(edge_count)]
 
-    # Add FL server
-    fl_server = net.addHost('fl_server', ip="10.0.0.100", mac="00:00:00:00:00:AA")
+    fl_server = net.addDocker(
+        'fl_server', ip="10.0.0.100", mac="00:00:00:00:00:AA", **containernet_kwargs
+    )
 
     # Add FL clients
-    fl_clients = [net.addHost(f'flclient{i + 1}', mac=int_to_mac(i + 1)) for i in range(fl_client_count)]
+    fl_clients = [
+        net.addDocker(f'flclient{i + 1}', mac=int_to_mac(i + 1), ip=f"10.0.0.{i + 1}",
+                      **get_host_limitation(), **containernet_kwargs)
+        for i in range(fl_client_count)
+    ]
 
     # Add background clients
-    bg_clients = [net.addHost(f'bgclient{i + 1}', mac="aa" + int_to_mac(fl_client_count + i + 1)[2:]) for i in
-                  range(bg_client_count)]
+    bg_clients = [
+        net.addDocker(f'bgclient{i + 1}', mac="aa" + int_to_mac(fl_client_count + i + 1)[2:],
+                      cpu_period=100000, cpu_quota=10000, mem_limit="128m", memswap_limit="128m",
+                      ip=f"10.0.0.{i + 20}", **containernet_kwargs)
+        for i in range(bg_client_count)
+    ]
 
     # Connect FL server to all core switches for redundancy
     net.addLink(fl_server, core_switches[0], bw=1000)
@@ -123,21 +154,11 @@ def build_topology(net, core_count, agg_count, edge_count, fl_client_count, bg_c
         for a_switch in agg_switches:
             net.addLink(c_switch, a_switch, bw=100)
 
-    # Divide aggregation switches for FL and BG
-    fl_agg_count = math.ceil(agg_count * fl_client_count / (fl_client_count + bg_client_count))
-    fl_agg_switches = agg_switches[:fl_agg_count]
-    bg_agg_switches = agg_switches[fl_agg_count:]
-
-    # Distribute edge switches among FL and BG aggregation switches
-    fl_edge_count = math.ceil(edge_count * fl_client_count / (fl_client_count + bg_client_count))
-    fl_edge_switches = edge_switches[:fl_edge_count]
-    bg_edge_switches = edge_switches[fl_edge_count:]
+    bg_edge_switches = edge_switches[0::2]
+    fl_edge_switches = edge_switches[1::2]
 
     # Connect FL aggregation switches to FL edge switches
-    connect_agg_to_edge(net, fl_agg_switches, fl_edge_switches)
-
-    # Connect BG aggregation switches to BG edge switches
-    connect_agg_to_edge(net, bg_agg_switches, bg_edge_switches)
+    connect_agg_to_edge(net, agg_switches, edge_switches)
 
     # Distribute FL clients across FL edge switches
     distribute_clients(net, fl_clients, fl_edge_switches)
@@ -165,14 +186,18 @@ def distribute_clients(net, clients, edge_switches):
         net.addLink(client, edge_switches[edge_index], bw=100)
 
 
-def calculate_topology_parameters(total_clients, fl_ratio=0.75, max_clients_per_edge=3, min_agg_ratio=0.5):
+def calculate_topology_parameters(total_clients, fl_ratio=0.5, max_clients_per_edge=2, max_edges_per_agg=2):
     fl_client_count = int(total_clients * fl_ratio)
     bg_client_count = total_clients - fl_client_count
 
+    # Calculate edge count
     edge_count = -(-total_clients // max_clients_per_edge)  # Ceiling division
-    edge_count += edge_count % 2
-    agg_count = max(2, int(edge_count * min_agg_ratio))
-    agg_count += agg_count % 2
+    edge_count += edge_count % 2  # Ensure even number of edge switches
+
+    # Calculate aggregation count
+    agg_count = -(-edge_count // max_edges_per_agg)  # Ceiling division
+
+    # Calculate core count
     core_count = 2 if edge_count <= 16 else 4
 
     return {
@@ -185,7 +210,7 @@ def calculate_topology_parameters(total_clients, fl_ratio=0.75, max_clients_per_
 
 
 def create_network():
-    net = MyMininet(link=TCLink, switch=OVSSwitch, controller=RemoteController)
+    net = MyMininet(switch=OVSSwitch, controller=RemoteController)
     device_counts = calculate_topology_parameters(20, 0.5, max_clients_per_edge=2)
     fl_server, fl_clients, bg_clients = build_topology(net, core_count=device_counts["core_count"],
                                                        agg_count=device_counts["agg_count"],
