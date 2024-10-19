@@ -18,7 +18,7 @@ prev_rx_dropped=$(cat /sys/class/net/$INTERFACE/statistics/rx_dropped)
 start_time=$(date +%s)
 
 # Write the CSV header
-echo "Elapsed_Seconds,TX_Bytes,TX_Errors,TX_Dropped,RX_Bytes,RX_Errors,RX_Dropped" > $OUTPUT_FILE
+echo "Time,Elapsed_Seconds,TX_Bytes,TX_Errors,TX_Dropped,RX_Bytes,RX_Errors,RX_Dropped" > $OUTPUT_FILE
 
 while true; do
     # Get the current time in seconds
@@ -46,7 +46,8 @@ while true; do
     delta_rx_dropped=$((rx_dropped - prev_rx_dropped))
 
     # Write the data to the CSV file
-    output="$elapsed_time,"
+    output="$(date +%s),"
+    output+="$elapsed_time,"
     output+="$delta_tx_bytes,$delta_tx_errors,$delta_tx_dropped,"
     output+="$delta_rx_bytes,$delta_rx_errors,$delta_rx_dropped"
 
