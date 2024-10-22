@@ -1,12 +1,10 @@
-import random
 import time
 import os
 from mininet.cli import CLI
-# from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.net import Containernet
 from mininet.node import OVSSwitch, RemoteController
-from mininet.topo import Topo
+from mininet.link import TCLink
 from numpy import random as np_random
 import random as py_random
 import threading
@@ -24,17 +22,20 @@ containernet_kwargs = {
     "dimage": "fl_mininet_image:latest",
     "network_mode": "none",
 }
+static_hosts_limits = {
+    "mem_limit": f"750m",
+    "memswap_limit": f"1g",
+    "cpu_period": 100000,
+}
 
 
-def get_host_limitation():
-    py_random.seed(43)
-    limits = py_random.choice([(256, 0.4), (512, 0.5), (1024, 0.6)])
-    limits = {
-        "mem_limit": f"{limits[0]}m",
-        "memswap_limit": f"{limits[0] * 2}m",
-        "cpu_period": 100000,
-        "cpu_quota": int(limits[1] * 100000),
-    }
+def host_specific_limitation(num_fl_clients):
+    cpu_limit = py_random.choices([0.3, 0.5, 0.8, 1], k=num_fl_clients)
+    limits = [
+        {
+            "cpu_quota": int(static_hosts_limits["cpu_period"] * cpu_limit[i]),
+        } for i in range(num_fl_clients)
+    ]
     return limits
 
 
@@ -51,7 +52,8 @@ class MyMininet(Containernet):
         self.fl_clients = fl_clients
         self.bg_hosts = bg_hosts
 
-    def start_experiment(self, log_dir, bg_traffic):
+    def start_experiment(self, exp_name, bg_traffic):
+        log_dir = f"{exp_name}_{ROUNDS}rounds_{len(self.fl_clients)}hosts_with{'' if bg_traffic else 'out'}_bg"
         self.stop_event.clear()
         if bg_traffic:
             thread = threading.Thread(target=self.start_bg_traffic, args=(log_dir,), daemon=True)
@@ -122,17 +124,16 @@ def build_topology(net, core_count, agg_count, edge_count, fl_client_count, bg_c
 
     edge_switches = [net.addSwitch(f'e{i + 1}', dpid=str(scount + i), **switch_config) for i in range(edge_count)]
 
-    fl_server = net.addDocker(
-        'fl_server', ip="10.0.0.100", mac="00:00:00:00:00:AA", **containernet_kwargs
+    fl_server = net.addHost(
+        'fl_server', ip="10.0.0.100", mac="00:00:00:00:00:AA"
     )
-
+    hos_specific_limitation = host_specific_limitation(fl_client_count)
     # Add FL clients
     fl_clients = [
         net.addDocker(f'flclient{i + 1}', mac=int_to_mac(i + 1), ip=f"10.0.0.{i + 1}",
-                      **get_host_limitation(), **containernet_kwargs)
+                      **static_hosts_limits, **hos_specific_limitation[i], **containernet_kwargs)
         for i in range(fl_client_count)
     ]
-
     # Add background clients
     bg_clients = [
         net.addDocker(f'bgclient{i + 1}', mac="aa" + int_to_mac(fl_client_count + i + 1)[2:],
@@ -147,12 +148,12 @@ def build_topology(net, core_count, agg_count, edge_count, fl_client_count, bg_c
     # Connect core switches to each other
     for i in range(len(core_switches)):
         for j in range(i + 1, len(core_switches)):
-            net.addLink(core_switches[i], core_switches[j], bw=100)
+            net.addLink(core_switches[i], core_switches[j], bw=100, delay="1ms")
 
     # Connect core switches to aggregation switches
     for c_switch in core_switches:
         for a_switch in agg_switches:
-            net.addLink(c_switch, a_switch, bw=100)
+            net.addLink(c_switch, a_switch, bw=100, delay="5ms")
 
     bg_edge_switches = edge_switches[0::2]
     fl_edge_switches = edge_switches[1::2]
@@ -175,7 +176,7 @@ def connect_agg_to_edge(net, agg_switches, edge_switches):
         start = i * edges_per_agg
         end = min(start + edges_per_agg, len(edge_switches))
         for e_switch in edge_switches[start:end]:
-            net.addLink(a_switch, e_switch, bw=100)
+            net.addLink(a_switch, e_switch, bw=100, delay="5ms")
 
 
 def distribute_clients(net, clients, edge_switches):
@@ -183,7 +184,7 @@ def distribute_clients(net, clients, edge_switches):
     for i, client in enumerate(clients):
         edge_index = i // clients_per_edge
         edge_index = min(edge_index, len(edge_switches) - 1)  # Ensure we don't go out of bounds
-        net.addLink(client, edge_switches[edge_index], bw=100)
+        net.addLink(client, edge_switches[edge_index], bw=100, delay="5ms")
 
 
 def calculate_topology_parameters(total_clients, fl_ratio=0.5, max_clients_per_edge=2, max_edges_per_agg=2):
@@ -210,7 +211,7 @@ def calculate_topology_parameters(total_clients, fl_ratio=0.5, max_clients_per_e
 
 
 def create_network():
-    net = MyMininet(switch=OVSSwitch, controller=RemoteController)
+    net = MyMininet(switch=OVSSwitch, controller=RemoteController, link=TCLink)
     device_counts = calculate_topology_parameters(20, 0.5, max_clients_per_edge=2)
     fl_server, fl_clients, bg_clients = build_topology(net, core_count=device_counts["core_count"],
                                                        agg_count=device_counts["agg_count"],
