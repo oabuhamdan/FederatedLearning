@@ -53,7 +53,7 @@ def plot_fl_task_times(info, title):
             client_data = info[round_key][client_key]
 
             server_to_client = client_data['server_to_client_time']
-            computing_time = 0.1#client_data['total_computing_time']
+            computing_time = client_data['total_computing_time']
             client_to_server = client_data['client_to_server_time']
 
             bottom = 0
@@ -88,6 +88,6 @@ def plot_fl_task_times(info, title):
     plt.show()
 
 
-file_title = "flowsched2_mnlarge_5rounds_10hosts_with_bg"
+file_title = "archive2/flowsched_mnlarge_5rounds_10hosts_with_bg_with_batch16"
 info = get_info(f"logs/{file_title}/server.log")
 plot_fl_task_times(info, file_title)

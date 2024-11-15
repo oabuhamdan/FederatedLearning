@@ -6,7 +6,7 @@ import numpy as np
 
 def get_info(file_path):
     pattern_metrics = r"Fit Metrics:\s*(\[\(.*?\)\])"
-    pattern_round_time = r'ROUND ([0-9]+) (START|END) TIME ([0-9]+(?:\.[0-9]+)?)'
+    pattern_round_time = r'ROUND ([0-9]+) FIT (START|END) TIME ([0-9]+(?:\.[0-9]+)?)'
 
     with open(file_path) as f:
         file_content = f.read()
@@ -37,7 +37,6 @@ def get_info(file_path):
             computing_start_time = client_info["computing_start_time"]
             computing_finish_time = client_info["computing_finish_time"]
             total_computing_time = computing_finish_time - computing_start_time
-            total_round_time = round_finish_time - round_start_time
             server_to_client_time = computing_start_time - round_start_time
             client_to_server_time = round_finish_time - computing_finish_time
             clients_info[f"Round-{i}"][f"Client-{client}"] = dict(
@@ -49,67 +48,75 @@ def get_info(file_path):
     return clients_info, round_time_info
 
 
-def plot_client_latencies_by_round(clients_info, round_time_info, file_title):
-    rounds = sorted(clients_info.keys(), key=lambda x: int(x.split('-')[1]))
-    all_clients = sorted(set(client for round_data in clients_info.values() for client in round_data.keys()))
+# Part A: Server-to-Client Time Delta Analysis
+def get_server_to_client_time_deltas(round_data):
+    min_time = min(client["server_to_client_time"] for client in round_data.values())
+    deltas = {
+        client_name: client["server_to_client_time"] - min_time
+        for client_name, client in round_data.items()
+    }
+    return sorted(deltas.items(), key=lambda x: x[1])
 
-    fig, ax = plt.subplots(figsize=(20, 8))
 
-    bar_width = 0.8
-    round_spacing = 3  # Increase this value to add more space between rounds
-    # colors = plt.cm.rainbow(np.linspace(0, 1, len(all_clients)))
-    # client_color_map = dict(zip(all_clients, colors))
-    colors = plt.cm.rainbow(np.linspace(0, 1, len(rounds)))
+# Part B: Client-to-Server Time Delta Analysis
+def get_client_to_server_time_deltas(round_data):
+    min_time = min(client["client_to_server_time"] for client in round_data.values())
+    deltas = {
+        client_name: client["client_to_server_time"] - min_time
+        for client_name, client in round_data.items()
+    }
+    return sorted(deltas.items(), key=lambda x: x[1])
 
-    for i, round_name in enumerate(rounds):
-        round_number = int(round_name.split('-')[1]) + 1
-        round_end_time = float(round_time_info[f'round_{round_number}']['end_time'])
-        round_start_time = float(round_time_info[f'round_{round_number}']['start_time'])
 
-        latencies = []
+# Part C: Plotting the Data
+def plot_all_rounds(clients_info):
+    rounds = list(clients_info.keys())
+    server_data = []
+    client_data = []
+    client_labels = []
+    round_positions = []
+    current_position = 0
 
-        for client in all_clients:
-            if client in clients_info[round_name]:
-                client_data = clients_info[round_name][client]
-                client_round_finish_time = client_data['client_round_finish_time']
-                latency = round_end_time - client_round_finish_time
-            else:
-                latency = 0  # or np.nan if you prefer
+    # Organize data by rounds with gaps in between
+    for round_key in rounds:
+        server_deltas = get_server_to_client_time_deltas(clients_info[round_key])
+        client_deltas = get_client_to_server_time_deltas(clients_info[round_key])
 
-            latencies.append(latency)
-            # client_colors.append(client_color_map[client])
+        # Extract and append server-to-client times for this round
+        server_clients, server_values = zip(*server_deltas)
+        server_data.extend(server_values)
+        client_labels.extend([f"{client}" for client in server_clients])  # Add round info in labels
+        round_positions.extend([current_position + i for i in range(len(server_values))])
+        current_position += len(server_values) + 2  # Add gap after each round
 
-        x = np.arange(len(all_clients)) + i * (len(all_clients) + round_spacing)
-        ax.bar(x, latencies, width=bar_width, color=colors[i], align='center', alpha=0.7)
+        # Extract and append client-to-server times for this round
+        client_clients, client_values = zip(*client_deltas)
+        client_data.extend(client_values)
 
-    # ax.set_xlabel('Clients (sorted, grouped by Round)')
-    ax.set_ylabel('Latency (seconds)', fontsize=20)
-    # ax.set_title('Client Latencies Relative to Round End Time')
+    # Plotting
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 10))
 
-    # Set x-ticks in the middle of each round group
-    group_centers = [np.mean(np.arange(len(all_clients)) + i * (len(all_clients) + round_spacing))
-                     for i in range(len(rounds))]
-    ax.set_xticks(group_centers)
-    ax.set_xticklabels([f'Round {int(r.split("-")[1]) + 1}' for r in rounds], fontsize=20)
+    # Upper Plot - Server-to-Client Time
+    ax1.bar(round_positions, server_data, width=0.8, color='blue', alpha=0.7)
+    ax1.set_title("Server-to-Client Time Deltas for All Rounds")
+    ax1.set_ylabel("Time Delta")
+    ax1.tick_params(axis='x', which='both', bottom=False)
+    ax1.set_xticks(round_positions)
+    ax1.set_xticklabels(client_labels, rotation=90)
+    ax1.grid(axis='y', linestyle='--', alpha=0.7)
 
-    # Add vertical lines to separate rounds
-    for i in range(1, len(rounds)):
-        ax.axvline(x=i * (len(all_clients) + round_spacing) - round_spacing / 2, color='gray', linestyle='--',
-                   alpha=0.5)
+    # Lower Plot - Client-to-Server Time
+    ax2.bar(round_positions, client_data, width=0.8, color='green', alpha=0.7)
+    ax2.set_title("Client-to-Server Time Deltas for All Rounds")
+    ax2.set_ylabel("Time Delta")
+    ax2.set_xticks(round_positions)
+    ax2.set_xticklabels(client_labels, rotation=90)
+    ax2.grid(axis='y', linestyle='--', alpha=0.7)
 
-    # Create a custom legend
-    # legend_elements = [plt.Rectangle((0, 0), 1, 1, facecolor=client_color_map[client], alpha=1) for client in
-    #                    all_clients]
-
-    # ax.legend(legend_elements, all_clients, title="Clients", loc='center left', bbox_to_anchor=(1, 0.5), fontsize=20)
-    plt.grid(True, which='major', axis='y', linestyle='--')
-    plt.yticks(fontsize=20)
-    # plt.tight_layout()
-    plt.title(file_title, fontsize=20)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
 
 
-file_title = "flowsched2_mnlarge_10rounds_10hosts_with_bg"
+file_title = "Exp6_mobilenet_large_5rounds_15hosts_with_bg_with_batch32"
 clients_info, round_time_info = get_info(f"logs/{file_title}/server.log")
-# plot_client_latencies(clients_info, round_time_info, file_title)
-plot_client_latencies_by_round(clients_info, round_time_info, file_title)
+plot_all_rounds(clients_info)

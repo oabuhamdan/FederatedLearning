@@ -3,16 +3,16 @@ import matplotlib.pyplot as plt
 import ast, re
 
 def get_info(file_path):
-    pattern_round_time = r'ROUND ([0-9]+) (START|END) TIME ([0-9]+(?:\.[0-9]+)?)'
+    pattern_round_time = r'ROUND ([0-9]+) FIT (START|END) TIME ([0-9]+(?:\.[0-9]+)?)'
 
     with open(file_path) as f:
         file_content = f.read()
 
-    matches_round_time = re.findall(pattern_round_time, file_content, re.DOTALL)
+    matches_round_time = re.findall(pattern_round_time, file_content, re.DOTALL)[:5]
 
 
     round_time_info = {f"round_{round_number + 1}": {} for round_number in range(0, len(matches_round_time)//2)}
-    for match in matches_round_time:
+    for match in matches_round_time[:4]:
         round_number = match[0]  # First group: round number
         start_end = match[1]  # Second group: either START or END
         time = match[2]  # Third group: time
@@ -21,10 +21,11 @@ def get_info(file_path):
     return round_time_info
 
 
-fwd_file_title = "fwd2_mnlarge_10rounds_10hosts_with_bg"
-flow_sched_file_title = "flowsched2_mnlarge_10rounds_10hosts_with_bg"
-fwd_info = get_info(f"logs/{fwd_file_title}/server.log")
-flowsched_info = get_info(f"logs/{flow_sched_file_title}/server.log")
+fwd_file_path = "experiments_code/logs/mobilenet_large_3rounds_10hosts_without_bg_with_batch16"
+fwd_file_path2 = "experiments_code/logs/mobilenet_large_2rounds_5hosts_without_bg_with_batch32"
+
+fwd_info = get_info(f"{fwd_file_path}/server.log")
+flowsched_info = get_info(f"{fwd_file_path2}/server.log")
 
 flow_sched = [float(item["end_time"]) - float(item['start_time']) for item in flowsched_info.values()]
 fwd = [float(item["end_time"]) - float(item['start_time']) for item in fwd_info.values()]

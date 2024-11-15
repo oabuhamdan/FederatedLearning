@@ -14,6 +14,8 @@ RUN apt update && apt install -y \
     net-tools \
     iputils-ping \
     iproute2 \
+    nano \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory inside the container
@@ -21,17 +23,21 @@ WORKDIR /app
 
 # Copy the requirements file into the container
 COPY requirement.txt .
-COPY FlowerClient.py .
-COPY FlowerServer.py .
-COPY network_stats.sh .
 
-# Create a virtual environment
-RUN python3 -m venv venv
+# Create a virtual environment and install dependencies
+RUN python3 -m venv venv && \
+    ./venv/bin/pip install --upgrade pip && \
+    ./venv/bin/pip install -r requirement.txt && \
+    ./venv/bin/pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# Upgrade pip and install dependencies in the virtual environment
-RUN ./venv/bin/pip install --upgrade pip
-RUN ./venv/bin/pip install -r requirement.txt
-RUN ./venv/bin/pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Now copy the rest of the application files
+COPY experiments_code/FlowerClient.py .
+COPY experiments_code/FlowerServer.py .
+COPY experiments_code/network_stats.sh .
+COPY experiments_code/my_server_class.py .
+
+#COPY venv/lib/python3.10/site-packages/flwr/server/server.py venv/lib/python3.12/site-packages/flwr/server/server.py
+COPY venv/lib/python3.10/site-packages/flwr/server/app.py venv/lib/python3.12/site-packages/flwr/server/app.py
 
 # Set the command to start an interactive shell
 CMD ["/bin/bash"]

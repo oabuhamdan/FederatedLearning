@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-DIR = "fwd_resnet18_5rounds_10hosts_without_bg"
+DIR = "fwd_25hosts_5rounds_25hosts_without_bg_with_batch8"
 
 
 # Load data for all 4 clients
@@ -12,9 +12,9 @@ def get_data(node, cols):
 
 
 log_files = list(filter(lambda x: x.startswith("client") and x.endswith("network.csv"), os.listdir(f"logs/{DIR}")))
-lngth = min(len(log_files), 5)
+lngth = min(len(log_files), 1)
 
-fig, axs = plt.subplots(lngth + 1, 1, figsize=(12, 8))  # 2x2 grid of subplots
+fig, axs = plt.subplots(lngth + 1, 1, figsize=(12, 6))  # 2x2 grid of subplots
 
 # Plot data for each client in a different subplot
 for i in range(lngth):
@@ -30,5 +30,5 @@ axs[lngth].set_title("Server")
 plt.tight_layout()
 
 # Show the plot
-# plt.show()
-plt.savefig(f"logs/plots/{DIR}_plot_network_logs.png")
+plt.show()
+# plt.savefig(f"logs/plots/{DIR}_plot_network_logs.png")

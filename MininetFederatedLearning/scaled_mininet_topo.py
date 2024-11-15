@@ -85,8 +85,8 @@ def create_network():
     # Create server
     server = net.addHost('server', ip='10.0.0.100/24')
 
-    # Add links between switches and central switch
-    info('*** Creating links\n')
+    # Add links.yaml between switches and central switch
+    info('*** Creating links.yaml\n')
     for switch in switches:
         net.addLink(switch, s_central)
 
