@@ -8,11 +8,11 @@ def get_info(file_path):
     with open(file_path) as f:
         file_content = f.read()
 
-    matches_round_time = re.findall(pattern_round_time, file_content, re.DOTALL)[:5]
+    matches_round_time = re.findall(pattern_round_time, file_content, re.DOTALL)
 
 
     round_time_info = {f"round_{round_number + 1}": {} for round_number in range(0, len(matches_round_time)//2)}
-    for match in matches_round_time[:4]:
+    for match in matches_round_time:
         round_number = match[0]  # First group: round number
         start_end = match[1]  # Second group: either START or END
         time = match[2]  # Third group: time
@@ -21,8 +21,8 @@ def get_info(file_path):
     return round_time_info
 
 
-fwd_file_path = "experiments_code/logs/mobilenet_large_3rounds_10hosts_without_bg_with_batch16"
-fwd_file_path2 = "experiments_code/logs/mobilenet_large_2rounds_5hosts_without_bg_with_batch32"
+fwd_file_path = "logs/archive/fwd_with_bg"
+fwd_file_path2 = "logs/[withBW]flowsched_1221_172403_mobilenet_large_10rounds_10hosts_with_bg_with_batch32"
 
 fwd_info = get_info(f"{fwd_file_path}/server.log")
 flowsched_info = get_info(f"{fwd_file_path2}/server.log")

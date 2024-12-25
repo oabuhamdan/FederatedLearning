@@ -88,6 +88,6 @@ def plot_fl_task_times(info, title):
     plt.show()
 
 
-file_title = "archive2/flowsched_mnlarge_5rounds_10hosts_with_bg_with_batch16"
+file_title = "fwd_exp2_mobilenet_large_10rounds_10hosts_with_bg_with_batch32"
 info = get_info(f"logs/{file_title}/server.log")
 plot_fl_task_times(info, file_title)

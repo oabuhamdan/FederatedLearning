@@ -1,3 +1,4 @@
+import random
 import re
 import ast
 import matplotlib.pyplot as plt
@@ -69,7 +70,7 @@ def get_client_to_server_time_deltas(round_data):
 
 
 # Part C: Plotting the Data
-def plot_all_rounds(clients_info):
+def plot_all_rounds(clients_info, file_title):
     rounds = list(clients_info.keys())
     server_data = []
     client_data = []
@@ -94,29 +95,36 @@ def plot_all_rounds(clients_info):
         client_data.extend(client_values)
 
     # Plotting
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 10))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8))
+    client_labels =  [label[7:] for label in client_labels]
 
     # Upper Plot - Server-to-Client Time
+    ax1.text(0.95, 0.99, file_title, fontsize=12, color='red', transform=ax1.transAxes, ha='right', va='top')
     ax1.bar(round_positions, server_data, width=0.8, color='blue', alpha=0.7)
-    ax1.set_title("Server-to-Client Time Deltas for All Rounds")
-    ax1.set_ylabel("Time Delta")
+    ax1.set_title("Server-to-Client Time Deltas for All Rounds", fontsize=16)
+    ax1.set_ylabel("Time Delta", fontsize=14)
+    ax1.set_xlabel("Clients", fontsize=14)
     ax1.tick_params(axis='x', which='both', bottom=False)
+    ax1.tick_params(axis='y', labelsize=14)
     ax1.set_xticks(round_positions)
-    ax1.set_xticklabels(client_labels, rotation=90)
+    ax1.set_xticklabels(client_labels)
     ax1.grid(axis='y', linestyle='--', alpha=0.7)
-
+    ax1.set_ylim(0, 25)
     # Lower Plot - Client-to-Server Time
     ax2.bar(round_positions, client_data, width=0.8, color='green', alpha=0.7)
-    ax2.set_title("Client-to-Server Time Deltas for All Rounds")
-    ax2.set_ylabel("Time Delta")
+    ax2.set_title("Client-to-Server Time Deltas for All Rounds", fontsize=16)
+    ax2.set_ylabel("Time Delta", fontsize=14)
+    ax2.set_xlabel("Clients", fontsize=14)
+    ax2.tick_params(axis='y', labelsize=14)
     ax2.set_xticks(round_positions)
-    ax2.set_xticklabels(client_labels, rotation=90)
+    ax2.set_xticklabels(client_labels)
     ax2.grid(axis='y', linestyle='--', alpha=0.7)
+    ax2.set_ylim(0, 25)
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.show()
+    plt.savefig(f"{file_title}.png")
 
 
-file_title = "Exp6_mobilenet_large_5rounds_15hosts_with_bg_with_batch32"
+file_title = "[withQos]_flowsched_1224_172303"
 clients_info, round_time_info = get_info(f"logs/{file_title}/server.log")
-plot_all_rounds(clients_info)
+plot_all_rounds(clients_info, file_title)
