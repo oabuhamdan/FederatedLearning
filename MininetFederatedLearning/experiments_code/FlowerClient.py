@@ -109,7 +109,7 @@ class FlowerClient(fl.client.NumPyClient):
 
     def get_properties(self, config: Config) -> dict[str, Scalar]:
         try:
-            interface = next(filter(lambda x: x.endswith("eth0"), psutil.net_if_addrs().keys()))
+            interface = next(filter(lambda x: x.startswith("flclient"), psutil.net_if_addrs().keys()))
             addrs = psutil.net_if_addrs().get(interface)
             ip_address = next((addr.address for addr in addrs if addr.family == socket.AF_INET), None)
             mac_address = next((addr.address for addr in addrs if addr.family == socket.AF_PACKET), None)

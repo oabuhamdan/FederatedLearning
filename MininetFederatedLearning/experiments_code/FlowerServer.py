@@ -100,12 +100,13 @@ def main():
         on_fit_config_fn=fit_config,
         evaluate_fn=evaluate_fn,
         fit_metrics_aggregation_fn=fit_metrics_aggregation_fn,
-        # initial_parameters=ndarrays_to_parameters(evaluator.get_parameters())
+        initial_parameters=ndarrays_to_parameters(evaluator.get_parameters())
     )
 
     # Start Flower server
     server = MyServer(strategy=strategy, client_manager=MySimpleClientManager(), zmq=args.zmq,
-                      my_server_address=args.server_address, onos_server_address="11.66.33.46")
+                      my_server_address=args.server_address, onos_server_address="11.66.33.46",
+                      log_path=args.log_path)
     fl.server.start_server(
         server_address=args.server_address + ":8080",
         config=fl.server.ServerConfig(num_rounds=args.rounds),
