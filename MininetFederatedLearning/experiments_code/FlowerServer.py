@@ -79,11 +79,6 @@ def fit_config(server_round: int):
     return config
 
 
-def fit_metrics_aggregation_fn(fit_metrics):
-    logging.info(f"Fit Metrics: {fit_metrics}")
-    return dict()
-
-
 def main():
     evaluator = CentralisedEvaluator(args.dataset)
 
@@ -99,7 +94,6 @@ def main():
         fraction_evaluate=0,
         on_fit_config_fn=fit_config,
         evaluate_fn=evaluate_fn,
-        fit_metrics_aggregation_fn=fit_metrics_aggregation_fn,
         initial_parameters=ndarrays_to_parameters(evaluator.get_parameters())
     )
 

@@ -1,52 +1,27 @@
-import random
-import re
-import ast
+import csv
+from collections import defaultdict
+
 import matplotlib.pyplot as plt
-import numpy as np
 
 
 def get_info(file_path):
-    pattern_metrics = r"Fit Metrics:\s*(\[\(.*?\)\])"
-    pattern_round_time = r'ROUND ([0-9]+) FIT (START|END) TIME ([0-9]+(?:\.[0-9]+)?)'
+    clients_info = defaultdict(dict)
 
-    with open(file_path) as f:
-        file_content = f.read()
+    # Open the CSV file and read it
+    with open(file_path, 'r') as file:
+        reader = csv.DictReader(file)
 
-    matches_metrics = re.findall(pattern_metrics, file_content, re.DOTALL)
-    matches_round_time = re.findall(pattern_round_time, file_content, re.DOTALL)
+        # Iterate through the data in the CSV
+        for row in reader:
+            round_num = row['current_round']
+            client_id = row['client_id']
 
-    rounds = []
-    for match in matches_metrics:
-        fit_metrics_list = ast.literal_eval(match)
-        rounds.append(fit_metrics_list)
-
-    round_time_info = {f"round_{round_number}": {} for round_number in range(1, len(rounds) + 1)}
-    for match in matches_round_time:
-        round_number = match[0]  # First group: round number
-        start_end = match[1]  # Second group: either START or END
-        time = match[2]  # Third group: time
-        round_time_info[f"round_{round_number}"][f"{start_end.lower()}_time"] = time
-
-    clients_info = {}
-    for i, flround in enumerate(rounds):
-        clients_info[f"Round-{i}"] = {}
-        for client_info in flround:
-            client_info = client_info[1]
-            client = client_info["client"]
-            round_start_time = client_info["client_round_start_time"]
-            round_finish_time = client_info["client_round_finish_time"]
-            computing_start_time = client_info["computing_start_time"]
-            computing_finish_time = client_info["computing_finish_time"]
-            total_computing_time = computing_finish_time - computing_start_time
-            server_to_client_time = computing_start_time - round_start_time
-            client_to_server_time = round_finish_time - computing_finish_time
-            clients_info[f"Round-{i}"][f"Client-{client}"] = dict(
-                total_computing_time=total_computing_time,
-                server_to_client_time=server_to_client_time,
-                client_to_server_time=client_to_server_time,
-                client_round_finish_time=round_finish_time
-            )
-    return clients_info, round_time_info
+            # Create the dictionary for the client in this round
+            clients_info[f"{round_num}"][f"{client_id}"] = {
+                "server_to_client_time": float(row['server_to_client_time']),
+                "client_to_server_time": float(row['client_to_server_time']),
+            }
+    return clients_info
 
 
 # Part A: Server-to-Client Time Delta Analysis
@@ -96,7 +71,7 @@ def plot_all_rounds(clients_info, file_title):
 
     # Plotting
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8))
-    client_labels =  [label[7:] for label in client_labels]
+    client_labels = [label for label in client_labels]
 
     # Upper Plot - Server-to-Client Time
     ax1.text(0.95, 0.99, file_title, fontsize=12, color='red', transform=ax1.transAxes, ha='right', va='top')
@@ -109,7 +84,7 @@ def plot_all_rounds(clients_info, file_title):
     ax1.set_xticks(round_positions)
     ax1.set_xticklabels(client_labels)
     ax1.grid(axis='y', linestyle='--', alpha=0.7)
-    ax1.set_ylim(0, 25)
+    # ax1.set_ylim(0, 25)
     # Lower Plot - Client-to-Server Time
     ax2.bar(round_positions, client_data, width=0.8, color='green', alpha=0.7)
     ax2.set_title("Client-to-Server Time Deltas for All Rounds", fontsize=16)
@@ -119,12 +94,13 @@ def plot_all_rounds(clients_info, file_title):
     ax2.set_xticks(round_positions)
     ax2.set_xticklabels(client_labels)
     ax2.grid(axis='y', linestyle='--', alpha=0.7)
-    ax2.set_ylim(0, 25)
+    # ax2.set_ylim(0, 25)
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.savefig(f"{file_title}.png")
+    plt.show()
+    # plt.savefig(f"{file_title}.png")
 
 
-file_title = "[withQos]_flowsched_1224_172303"
-clients_info, round_time_info = get_info(f"logs/{file_title}/server.log")
+file_title = "[withQoS]_flowsched_1226_165022"
+clients_info = get_info(f"logs/{file_title}/fl_task_times.csv")
 plot_all_rounds(clients_info, file_title)

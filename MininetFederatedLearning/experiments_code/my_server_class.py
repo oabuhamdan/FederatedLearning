@@ -98,7 +98,7 @@ def fit_clients(
 class MyServer(Server):
     def __init__(self, *, client_manager, strategy, zmq, my_server_address, onos_server_address, log_path):
         super().__init__(client_manager=client_manager, strategy=strategy)
-        self.server_log = csv.writer(open(f'{log_path}/server_times.csv', 'w'), dialect='unix')
+        self.server_log = csv.writer(open(f'{log_path}/fl_task_times.csv', 'w'), dialect='unix')
         self.zmq = zmq
         if self.zmq:
             self.zmq_handler = ZMQHandler(my_server_address, onos_server_address)
@@ -177,18 +177,16 @@ class MyServer(Server):
 
         # Run federated learning for num_rounds
         start_time = timeit.default_timer()
-        self.server_log.writerow(['client_id', 'round_time', 'client_round_start_time',
-                                  'server_to_client_time', 'computing_time', 'client_to_server_time'])
+        self.server_log.writerow(['current_round', 'client_id', 'round_time', 'server_to_client_time',
+                                  'computing_time', 'client_to_server_time'])
         for current_round in range(1, num_rounds + 1):
             round_start_time = timeit.default_timer()
             log(INFO, "")
             log(INFO, "[ROUND %s]", current_round)
-            log(INFO, "[ROUND %s FIT START TIME %s]", current_round, timeit.default_timer())  # osama's edit
             res_fit = self.fit_round(
                 server_round=current_round,
                 timeout=timeout,
             )
-            log(INFO, "[ROUND %s FIT END TIME %s]", current_round, timeit.default_timer())  # osama's edit
             if res_fit is not None:
                 parameters_prime, fit_metrics, (results, failures) = res_fit  # fit_metrics_aggregated
                 if parameters_prime:
@@ -196,7 +194,7 @@ class MyServer(Server):
                 history.add_metrics_distributed_fit(
                     server_round=current_round, metrics=fit_metrics
                 )
-                self.log_csv_metrics(round_start_time, results)
+                self.log_csv_metrics(current_round, round_start_time, results)
 
             # Evaluate model using strategy implementation
             res_cen = self.strategy.evaluate(current_round, parameters=self.parameters)
@@ -232,19 +230,16 @@ class MyServer(Server):
         elapsed = end_time - start_time
         return history, elapsed
 
-    def log_csv_metrics(self, round_start_time, results):
+    def log_csv_metrics(self, current_round, round_start_time, results):
         for result in results:
             metrics = result[1].metrics
             client_id = metrics['client']
-            client_round_start_time = metrics["client_round_start_time"] - round_start_time
             server_to_client_time = metrics["computing_start_time"] - metrics["client_round_start_time"]
-            computing_start_time = metrics["computing_start_time"] - client_round_start_time
-            computing_time = metrics["computing_finish_time"] - computing_start_time
-            round_time = metrics["client_round_finish_time"] - client_round_start_time
+            computing_time = metrics["computing_finish_time"] - metrics["computing_start_time"]
+            round_time = metrics["client_round_finish_time"] - metrics["client_round_start_time"]
             client_to_server_time = metrics["client_round_finish_time"] - metrics["computing_finish_time"]
-            self.server_log.writerow([client_id, round_time, client_round_start_time,
-                                      server_to_client_time, computing_time, client_to_server_time])
-        self.server_log.writerow([])
+            self.server_log.writerow([current_round, client_id, round_time, server_to_client_time,
+                                      computing_time, client_to_server_time])
 
 
 class MyClient:

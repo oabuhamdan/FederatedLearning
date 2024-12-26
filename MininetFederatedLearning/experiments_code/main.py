@@ -12,6 +12,7 @@ from topology import MyTopo
 from plotter import MininetPlotter
 from run_and_monitor_exp import ExperimentRunner
 from mininet.net import Containernet
+import topohub.mininet
 
 
 class MyMininet(Containernet):
@@ -25,13 +26,8 @@ class MyMininet(Containernet):
         return fl_server, fl_clients
 
     def get_bg_hosts(self):
-        bg_core, bg_agg = [], []
-        for host in self.hosts:
-            if "bgchost" in host.name:
-                bg_core.append(host)
-            elif "bgahost" in host.name:
-                bg_agg.append(host)
-        return dict(bgcore=bg_core, bgagg=bg_agg) if bg_core else []
+        bg_clients = [host for host in self.hosts if "bgclient" in host.name]
+        return bg_clients
 
     """
     NOTES:
@@ -52,18 +48,16 @@ class MyMininet(Containernet):
             f"ovs-vsctl -- set port {{intf}} qos=@newqos "
             f"-- --id=@newqos create qos type=linux-htb  other-config:max-rate={{max}}"
             f" queues=0=@q0,1=@q1 "
-            f"-- --id=@q0 {common.format(prio=2)} other-config:max-rate={{max}} other-config:min-rate={{min}} "
+            f"-- --id=@q0 {common.format(prio=2)} other-config:max-rate={{max}} other-config:min-rate=1000000 "
             f"-- --id=@q1 {common.format(prio=1)} other-config:max-rate={{max}} other-config:min-rate={{min}}"
             # high prio
         )
 
         intf_list = [intf for sw in self.switches for intf in sw.intfs.values() if re.match(".*-eth.*", intf.name)]
         for intf in intf_list:
-            # max_rate = 1_000_000000 if intf.name.startswith("cs") else 100_000000
-            max_rate = 100_000000
-            min_rate = max_rate // 2
-            ovs = os.system(cmd.format(intf=intf.name, max=max_rate, min=min_rate))
-            print(f"Created Q with ID {ovs}")
+            max_rate = 1_000_000_000 if intf.name.startswith("cs") else 100_000_000
+            min_rate = max_rate - 10_000_000 # rate - 10mbps
+            os.system(cmd.format(intf=intf.name, max=max_rate, min=min_rate))
 
     @staticmethod
     def delete_qos():
@@ -90,14 +84,14 @@ class MyMininet(Containernet):
 
 def start():
     controller = RemoteController('c0', ip='11.66.33.46', port=6653)
-    topo_creator = MyTopo(fl_clients=10, bg_clients=20, number_of_levels=3,
+    topo_creator = MyTopo(fl_clients=10, bg_clients=20, number_of_levels=3, max_fl_clients_per_edge=1,
                           min_switches_per_level=3, max_switches_per_level=6,
-                          start_level_for_aggregation=1, no_core_switches=4)
+                          start_level_for_aggregation=0, no_core_switches=4)
     net1 = MyMininet(topo=topo_creator, switch=OVSSwitch, link=TCLink, controller=controller, qos=True)
 
     (fl_server, fl_clients), bg_clients = net1.get_fl_hosts(), net1.get_bg_hosts()
 
-    exp_runner1 = ExperimentRunner(f"[withQos]_flowsched_{time.strftime('%m%d_%H%M%S')}", fl_server=fl_server,
+    exp_runner1 = ExperimentRunner(f"[withQoS]_flowsched_{time.strftime('%m%d_%H%M%S')}", fl_server=fl_server,
                                    fl_clients=fl_clients, bg_clients=bg_clients, rounds=5, batch_size=32, zmq=True)
     with net1:
         CLI(net1)
@@ -108,6 +102,7 @@ def start():
                 exp_info.write(json.dumps(str(exp_runner1)))
             info(f'*** Starting {exp_runner1.exp_name}\n')
             exp_runner1.start_experiment()
+        CLI(net1)
 
 
 if __name__ == '__main__':

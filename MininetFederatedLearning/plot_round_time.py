@@ -21,11 +21,11 @@ def get_info(file_path):
     return round_time_info
 
 
-fwd_file_path = "logs/archive/fwd_with_bg"
-fwd_file_path2 = "logs/[withBW]flowsched_1221_172403_mobilenet_large_10rounds_10hosts_with_bg_with_batch32"
+fwd_file_path = "logs/[withBW]_fwd_1225_151433"
+flow_sched_file = "logs/[withBW]_flowsched_1225_160907"
 
 fwd_info = get_info(f"{fwd_file_path}/server.log")
-flowsched_info = get_info(f"{fwd_file_path2}/server.log")
+flowsched_info = get_info(f"{flow_sched_file}/server.log")
 
 flow_sched = [float(item["end_time"]) - float(item['start_time']) for item in flowsched_info.values()]
 fwd = [float(item["end_time"]) - float(item['start_time']) for item in fwd_info.values()]

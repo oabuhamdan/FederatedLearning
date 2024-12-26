@@ -41,7 +41,7 @@ def plot_data(df, field, direction):
     plt.show()
 
 def main():
-    df = load_data("./logs/archive/fwd_with_bg/linkinfo.csv")
+    df = load_data("/home/osama/flow_sched_logs/link_util.csv.log")
     plot_data(df, 'used', "c2s")
 
 main()

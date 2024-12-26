@@ -6,7 +6,7 @@ import yaml
 from mininet.node import Docker
 from mininet.topo import Topo
 
-link_config = {"bw": 100, "delay": "1ms", "max_queue_size": 5000, "use_tbf": False, "latency_ms": 400}
+link_config = {}#{"bw": 100, "delay": "1ms", "max_queue_size": 5000, "use_tbf": False, "latency_ms": 400}
 
 
 class MyTopo(Topo):
@@ -79,84 +79,37 @@ class MyTopo(Topo):
         agg_switches = self.create_agg_switches(valid_intermediate_levels, num_agg_switches)
 
         # create fl edge switches and clients
-        fl_edge_switches = self.create_fl_edge_switches(agg_switches, num_fl_edge_switches)
-        self.create_fl_clients(fl_edge_switches)
+        fl_edge_switches = self.create_edge_switches(agg_switches, num_fl_edge_switches, "fl")
+        self.create_clients(fl_edge_switches, "fl")
 
         # create bg edge switches and clients
         if self.no_bg_clients > 0:
-            bg_edge_core, bg_edge_agg = self.create_bg_edge_switches(
-                core_switches[1:], agg_switches, num_bg_edge_switches
-            )
-            self.create_bg_clients(bg_edge_core, bg_edge_agg)
+            bg_edge_switches = self.create_edge_switches(core_switches[1:] + agg_switches, num_bg_edge_switches, "bg", num_fl_edge_switches)
+            self.create_clients(bg_edge_switches, "bg")
 
-    def create_bg_edge_switches(self, core_switches, agg_switches, num_bg_edge_switches):
-        num_edge_agg = math.ceil(len(agg_switches) / (len(core_switches) + len(agg_switches)) * num_bg_edge_switches)
-        num_edge_core = num_bg_edge_switches - num_edge_agg
+    def create_clients(self, edge_switches, client_type):
+        def int_to_mac(n):
+            return ''.join(f'{(n >> (i * 8)) & 0xff:02x}' for i in range(5, -1, -1))
 
-        bg_edge_core = [self.addSwitch(f'bgc_es{i + 1}', dpid=f"41{i}", **self.switch_config)
-                        for i in range(num_edge_core)]
-        bg_edge_agg = [self.addSwitch(f'bga_es{i + 1}', dpid=f"42{i}", **self.switch_config)
-                       for i in range(num_edge_agg)]
-
-        # self.link_configs[self.links_by_level[-2]]
-
-        for i, core in enumerate(bg_edge_core):
-            self.addLink(core, core_switches[i % len(core_switches)], **link_config)
-
-        for i, aggregate in enumerate(bg_edge_agg):
-            self.addLink(aggregate, agg_switches[i % len(agg_switches)], **link_config)
-
-        return bg_edge_core, bg_edge_agg
-
-    @staticmethod
-    def int_to_mac(n):
-        return ''.join(f'{(n >> (i * 8)) & 0xff:02x}' for i in range(5, -1, -1))
-
-    def create_bg_clients(self, bg_edge_core, bg_edge_agg):
-        num_client_agg = math.ceil(len(bg_edge_agg) / (len(bg_edge_agg) + len(bg_edge_core)) * self.no_bg_clients)
-        num_client_core = self.no_bg_clients - num_client_agg
-
-        bga_hosts = [
-            self.addHost(f'bgahost{i + 1}', ip=f"10.0.0.{i + 50}", mac=self.int_to_mac(i + 50),
-                         **self.containernet_kwargs, **self.bg_host_limits)
-            for i in range(num_client_agg)
-        ]
-        bgc_hosts = [
-            self.addHost(f'bgchost{i + 1}', ip=f"10.0.0.{i + 30}", mac=self.int_to_mac(i + 30),
-                         **self.containernet_kwargs, **self.bg_host_limits)
-            for i in range(num_client_core)
-        ]
-
-        # self.link_configs[self.links_by_level[-1]]
-        len_bg_edge_agg = len(bg_edge_agg)
-        for i, client in enumerate(bga_hosts):
-            self.addLink(client, bg_edge_agg[i % len_bg_edge_agg], **link_config)
-
-        len_bg_edge_core = len(bg_edge_core)
-        for i, client in enumerate(bgc_hosts):
-            self.addLink(client, bg_edge_core[i % len_bg_edge_core], **link_config)
-
-    def create_fl_clients(self, edge_switches):
-
+        ip_shift = 0 if client_type == 'fl' else 50
+        client_no = self.no_fl_clients if client_type == 'fl' else self.no_bg_clients
+        host_limit = self.fl_host_limits if client_type == 'fl' else self.bg_host_limits
         clients = [
-            self.addHost(f'flclient{i + 1}', ip=f"10.0.0.{i + 1}", mac=self.int_to_mac(i + 1),
-                         **self.containernet_kwargs, **self.fl_host_limits) for i in range(self.no_fl_clients)
-        ]
+            self.addHost(f'{client_type}client{i + 1}', ip=f"10.0.0.{i + ip_shift + 1}",
+                         mac=int_to_mac(i + ip_shift + 1), **self.containernet_kwargs, **host_limit
+                         ) for i in range(client_no)]
         len_edge = len(edge_switches)
-        # self.link_configs[self.links_by_level[-1]]
         for i, client in enumerate(clients):
             self.addLink(client, edge_switches[i % len_edge], **link_config)
-
         return clients
 
-    def create_fl_edge_switches(self, agg_switches, number_edge_switches):
-        edge_switches = [self.addSwitch(f'fl_es{i + 1}', dpid=f"40{i}", **self.switch_config)
+    def create_edge_switches(self, agg_switches, number_edge_switches, switch_type, prev_cnt=0):
+        switch_dpid = 0 if switch_type == "fl" else 1
+        edge_switches = [self.addSwitch(f'{switch_type}_es{i + 1}', dpid=f"4{switch_dpid}{i}", **self.switch_config)
                          for i in range(number_edge_switches)]
         len_agg = len(agg_switches)
-        # self.link_configs[self.links_by_level[-2]]
         for i, edge_switch in enumerate(edge_switches):
-            self.addLink(edge_switch, agg_switches[i % len_agg], **link_config)
-
+            self.addLink(edge_switch, agg_switches[(i + prev_cnt) % len_agg], **link_config)
         return edge_switches
 
     def create_agg_switches(self, valid_intermediate_levels, num_agg):

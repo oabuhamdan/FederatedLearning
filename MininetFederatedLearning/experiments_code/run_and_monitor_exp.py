@@ -100,18 +100,25 @@ class BGTrafficGenerator:
         self.stop_event = threading.Event()
         self._traffic_thread = None
 
+    @staticmethod
+    def get_switch(host):
+        return host.defaultIntf().link.intf2.node
+
     def _gen_traffic(self):
         i = 0 # used for round-robin
+
         with open(f"../{self.log_path}/traffic_logs.txt", "w") as traffic_log:
-            random.shuffle(self.bg_hosts["bgcore"])
-            random.shuffle(self.bg_hosts["bgagg"])
+            random.shuffle(self.bg_hosts)
+            host_dict = {
+                src_host: [host for host in self.bg_hosts if self.get_switch(host) != self.get_switch(src_host)]
+                for src_host in self.bg_hosts
+            }
             # bw_choices = list(range(60, 90, 10))
             # t_choices = list(range(25, 100, 25))
-            flow_sizes = list(range(50, 200, 25))
+            flow_sizes = list(range(50, 300, 50))
             while not self.stop_event.is_set():
-                src, dst = random.choice([("bgcore", "bgagg"), ("bgagg", "bgcore")])
-                src_host = self.bg_hosts[src][i % len(self.bg_hosts[src])]
-                dst_host = self.bg_hosts[dst][i % len(self.bg_hosts[dst])]
+                src_host = self.bg_hosts[i % len(host_dict)]
+                dst_host = random.choice(host_dict[src_host])
 
                 # bandwidth = random.choice(bw_choices)  # Mbps
                 # duration = random.choice(t_choices)  # duration
@@ -135,10 +142,10 @@ class BGTrafficGenerator:
 
                 # Delay before generating the next flow
                 i += 1
-                time.sleep(2)
+                time.sleep(5)
 
     def monitor_network(self):
-        for bghost in self.bg_hosts["bgcore"] + self.bg_hosts["bgagg"]:
+        for bghost in self.bg_hosts:
             inf = bghost.defaultIntf()
             bghost.cmd(f"./network_stats.sh {inf} 1 {self.log_path}/{bghost.name}_network.csv > /dev/null 2>&1 &")
 
@@ -158,7 +165,7 @@ class BGTrafficGenerator:
             self._traffic_thread.join(timeout=1)
             self._traffic_thread = None
 
-        [host.cmd("pkill -f 'iperf3'") for host in self.bg_hosts["bgcore"] + self.bg_hosts["bgagg"]]
-        [host.cmd("pkill -f 'network_stats.sh'") for host in self.bg_hosts["bgcore"] + self.bg_hosts["bgagg"]]
+        [host.cmd("pkill -f 'iperf3'") for host in self.bg_hosts]
+        [host.cmd("pkill -f 'network_stats.sh'") for host in self.bg_hosts]
 
         print("~ Traffic generation has stopped, and all iperf3 processes have been terminated ~")
