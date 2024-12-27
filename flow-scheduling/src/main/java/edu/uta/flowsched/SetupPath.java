@@ -18,7 +18,7 @@ public class SetupPath {
     public static void clientToServer(FLHost flHost) {
         long tik = System.currentTimeMillis();
 
-        Optional<MyPath> clientToServerPath = PathFinder.getPathsToServer(flHost.id());
+        Optional<MyPath> clientToServerPath = PathFinder.getPathsToServer(flHost);
         if (clientToServerPath.isEmpty()) {
             Util.log("general", String.format("Client %s has no paths yet", flHost.getFlClientCID()));
             return;
@@ -28,15 +28,14 @@ public class SetupPath {
         long capacityModelWillOccupy = getCapacityModelWillOccupy(clientToServerPath.get());
         Util.log("general", String.format("C2S Reserved %s Mbps for Client %s ", (double) capacityModelWillOccupy / DataRateUnit.MBPS.multiplier(), flHost.getFlClientCID()));
 
-        long tak = System.currentTimeMillis();
-        Util.log("general", String.format("Took %s ms to setup a path for client to Server", tak - tik));
+        Util.log("overhead.csv", String.format("controller,c2s_path,%s", System.currentTimeMillis() - tik));
     }
 
     public static void serverToClient(List<FLHost> flHosts) {
         try {
             long tik = System.currentTimeMillis();
             for (FLHost flHost : flHosts) {
-                Optional<MyPath> serverToClientPath = PathFinder.getPathsToClient(flHost.id());
+                Optional<MyPath> serverToClientPath = PathFinder.getPathsToClient(flHost);
                 if (serverToClientPath.isEmpty()) {
                     Util.log("general", String.format("Client %s has no paths yet", flHost.getFlClientCID()));
                     continue;
@@ -55,8 +54,9 @@ public class SetupPath {
 //            Map<FLHost, MyPath> results = serverToClientsNetworkOptimizer.findOptimalServerToClientsPath();
 //            results.forEach((key, value) -> PathRulesInstaller.INSTANCE.installPathRules(key.mac(), value));
 //
-            long tak = System.currentTimeMillis();
-            Util.log("general", String.format("Took %s ms to setup paths for every client from Server", tak - tik));
+
+//            Util.log("general", String.format("Took %s ms to setup paths for every client from Server", tak - tik));
+            Util.log("overhead.csv", String.format("controller,s2c_paths,%s", System.currentTimeMillis() - tik));
         } catch (Exception e) {
             Util.log("general", String.format("Error: %s", e.getMessage()));
             Util.log("general", String.format("%s", (Object[]) e.getStackTrace()));
