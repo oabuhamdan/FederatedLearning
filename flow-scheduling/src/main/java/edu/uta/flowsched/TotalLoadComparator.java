@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class TotalLoadComparator implements Comparator<MyPath> {
-    private static final double CAPACITY_WEIGHT = 0.6;
-    private static final double AVG_LOAD_WEIGHT = 0.3;
+    private static final double CAPACITY_WEIGHT = 0.4;
+    private static final double AVG_LOAD_WEIGHT = 0.5;
     private static final double HOP_COUNT_WEIGHT = 0.1;
     private static final int MAX_REASONABLE_HOPS = 10;
 
