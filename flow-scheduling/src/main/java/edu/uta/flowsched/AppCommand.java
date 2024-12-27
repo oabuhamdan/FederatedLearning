@@ -1,18 +1,3 @@
-/*
- * Copyright 2024-present Open Networking Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package edu.uta.flowsched;
 
 import org.apache.karaf.shell.api.action.Argument;
@@ -24,6 +9,10 @@ import org.onosproject.net.DeviceId;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Sample Apache Karaf CLI command.
@@ -35,12 +24,21 @@ public class AppCommand extends AbstractShellCommand {
     String type = "";
     @Argument(name = "deviceid", description = "type of stats to print", required = false, index = 1)
     String deviceID = "";
+    static ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(0);
+    static ScheduledFuture<?> scheduledFuture;
 
     @Override
     protected void doExecute() {
         switch (type) {
             case "link-info":
-                linkInfo();
+                Util.log("link_util.csv", "link,free,used");
+                scheduledFuture = scheduledExecutorService.scheduleAtFixedRate(this::linkInfo, Util.POLL_FREQ, Util.POLL_FREQ, TimeUnit.SECONDS);
+                break;
+            case "stop-link-info":
+                if (scheduledFuture != null) {
+                    scheduledFuture.cancel(true);
+                    scheduledFuture = null;
+                }
                 break;
             case "meter":
                 addMeter(DeviceId.deviceId(deviceID));
@@ -58,10 +56,9 @@ public class AppCommand extends AbstractShellCommand {
 
     void linkInfo() {
         for (MyLink link : LinkInformationDatabase.INSTANCE.getAllLinkInformation()) {
-            if (link.src().deviceId().toString().matches("of:000000000000010\\d") || link.dst().deviceId().toString().matches("of:000000000000010\\d"))
-                print("%s,%s,%s", Util.formatLink(link), link.getEstimatedFreeCapacity(), link.getCurrentThroughput());
+            Util.log("link_util.csv", String.format("%s,%s,%s", Util.formatLink(link), link.getEstimatedFreeCapacity(), link.getCurrentThroughput()));
         }
-        print(",,");
+        Util.log("link_util.csv", ",,");
     }
 
 }
