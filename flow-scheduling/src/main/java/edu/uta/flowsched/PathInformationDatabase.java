@@ -1,34 +1,18 @@
 package edu.uta.flowsched;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import org.onlab.util.KryoNamespace;
-import org.onosproject.net.ConnectPoint;
-import org.onosproject.net.DeviceId;
 import org.onosproject.net.HostId;
-import org.onosproject.net.Link;
-import org.onosproject.net.device.DeviceEvent;
-import org.onosproject.net.device.DeviceListener;
-import org.onosproject.net.device.PortStatistics;
 import org.onosproject.store.serializers.KryoNamespaces;
 import org.onosproject.store.service.EventuallyConsistentMap;
 import org.onosproject.store.service.WallClockTimestamp;
 
-import java.util.Comparator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
-
-import static org.onosproject.net.HostId.hostId;
-import static org.onosproject.net.device.DeviceEvent.Type.PORT_STATS_UPDATED;
 
 public class PathInformationDatabase {
     public static final PathInformationDatabase INSTANCE = new PathInformationDatabase();
@@ -62,26 +46,30 @@ public class PathInformationDatabase {
         SERVER_TO_CLIENT_PATHS.clear();
     }
 
-    public List<MyPath> getPathsToServer(HostId hostId) {
-        return Optional.ofNullable(CLIENT_TO_SERVER_PATHS.get(hostId)).orElse(List.of());
+    public List<MyPath> getPathsToServer(FLHost host) {
+        List<MyPath> paths = Optional.ofNullable(CLIENT_TO_SERVER_PATHS.get(host.id())).orElse(List.of());
+        Util.log("general", String.format("%s CLIENT_TO_SERVER_PATHS paths found for client %s", paths.size(), host.getFlClientCID()));
+        return paths;
     }
 
-    public List<MyPath> getPathsToClient(HostId hostId) {
-        return Optional.ofNullable(SERVER_TO_CLIENT_PATHS.get(hostId)).orElse(List.of());
+    public List<MyPath> getPathsToClient(FLHost host) {
+        List<MyPath> paths = Optional.ofNullable(SERVER_TO_CLIENT_PATHS.get(host.id())).orElse(List.of());
+        Util.log("general", String.format("%s SERVER_TO_CLIENT_PATHS paths found for client %s", paths.size(), host.getFlClientCID()));
+        return paths;
     }
 
     public void setPathsToServer(HostId hostId) {
-        // Set up a set of 5 quick paths
-        List<MyPath> clientToServerPaths = Services.pathService.getKShortestPaths(hostId, HostId.hostId(Util.FL_SERVER_MAC))
-                .limit(10).map(MyPath::new).collect(Collectors.toList());
-        CLIENT_TO_SERVER_PATHS.put(hostId, clientToServerPaths);
+        CLIENT_TO_SERVER_PATHS.put(hostId, new LinkedList<>());
+        Services.pathService.getKShortestPaths(hostId, HostId.hostId(Util.FL_SERVER_MAC))
+                .limit(10).map(MyPath::new)
+                .forEach(path -> CLIENT_TO_SERVER_PATHS.get(hostId).add(path));
     }
 
     public void setPathsToClient(HostId hostId) {
-        List<MyPath> serverToClientPaths = Services.pathService.getKShortestPaths(HostId.hostId(Util.FL_SERVER_MAC), hostId)
-                .limit(10)
-                .map(MyPath::new).collect(Collectors.toList());
-        SERVER_TO_CLIENT_PATHS.put(hostId, serverToClientPaths);
+        SERVER_TO_CLIENT_PATHS.put(hostId, new LinkedList<>());
+        Services.pathService.getKShortestPaths(HostId.hostId(Util.FL_SERVER_MAC), hostId)
+                .limit(10).map(MyPath::new)
+                .forEach(path -> SERVER_TO_CLIENT_PATHS.get(hostId).add(path));
     }
 
     private void updateBottleneckPath() {
