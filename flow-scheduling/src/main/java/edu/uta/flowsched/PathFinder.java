@@ -1,8 +1,5 @@
 package edu.uta.flowsched;
 
-import org.onosproject.net.HostId;
-import org.onosproject.net.Link;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -13,15 +10,15 @@ public class PathFinder {
     // debug in the background
     static ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-    public static Optional<MyPath> getPathsToServer(HostId hostId) {
-        List<MyPath> paths = getEntries(PathInformationDatabase.INSTANCE.getPathsToServer(hostId));
-        executorService.submit(() -> debugPaths(hostId, "C2S", paths));
+    public static Optional<MyPath> getPathsToServer(FLHost host) {
+        List<MyPath> paths = getEntries(PathInformationDatabase.INSTANCE.getPathsToServer(host));
+        executorService.submit(() -> debugPaths(host, "C2S", paths));
         return paths.isEmpty()? Optional.empty() : Optional.ofNullable(paths.get(0));
     }
 
-    public static Optional<MyPath> getPathsToClient(HostId hostId) {
-        List<MyPath> paths = getEntries(PathInformationDatabase.INSTANCE.getPathsToClient(hostId));
-        executorService.submit(() -> debugPaths(hostId, "S2C", paths));
+    public static Optional<MyPath> getPathsToClient(FLHost host) {
+        List<MyPath> paths = getEntries(PathInformationDatabase.INSTANCE.getPathsToClient(host));
+        executorService.submit(() -> debugPaths(host, "S2C", paths));
         return paths.isEmpty()? Optional.empty() : Optional.ofNullable(paths.get(0));
     }
 
@@ -30,9 +27,9 @@ public class PathFinder {
         return paths.stream().sorted(totalLoadComparator).collect(Collectors.toList());
     }
 
-    private static void debugPaths(HostId hostId, String dir, List<MyPath> paths) {
+    private static void debugPaths(FLHost hostId, String dir, List<MyPath> paths) {
         if (paths.size() > 0) {
-            FLHost flHost = ClientInformationDatabase.INSTANCE.getHostByHostID(hostId);
+            FLHost flHost = ClientInformationDatabase.INSTANCE.getHostByHostID(hostId.id());
             Util.log("link_debug", String.format("***** Logging %s paths for Host %s*****", dir, flHost.getFlClientCID()));
             for (int i = 0; i < paths.size(); i++) {
                 MyLink bottleneck = paths.get(i).getBottleneckLink();
