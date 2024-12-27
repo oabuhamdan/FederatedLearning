@@ -17,6 +17,7 @@ public class ZeroMQServer {
 
     private static final ExecutorService executorService = Executors.newCachedThreadPool();
     private static final ClientInformationDatabase clientInformationDatabase = ClientInformationDatabase.INSTANCE;
+    private static int ROUND = 0;
     ZMQ.Socket socket;
     ZMQ.Context context;
 
@@ -45,11 +46,12 @@ public class ZeroMQServer {
             long clientTimeMS = jsonObject.getLong("time_ms");
             long serverTimeMS = System.currentTimeMillis();
             Object jsonMessage = jsonObject.get("message");
-            Util.log("general", String.format("Message: %s, Overhead: %sms", messageType, serverTimeMS - clientTimeMS));
+            Util.log("overhead.csv", String.format("zmq,%s,%s", messageType, serverTimeMS - clientTimeMS));
             if (messageType == MessageType.UPDATE_DIRECTORY) {
                 JSONObject clientInfo = (JSONObject) jsonMessage;
                 updateDirectory(clientInfo);
             } else if (messageType == MessageType.SERVER_TO_CLIENTS) {
+                Util.log("general", String.format("******* Starting Round: %s *******", ROUND++));
                 JSONArray clients = (JSONArray) jsonMessage;
                 handleServerToClientsPaths(clients);
             } else if (messageType == MessageType.CLIENT_TO_SERVER) {
@@ -71,7 +73,8 @@ public class ZeroMQServer {
         HostId hostId = HostId.hostId(macAddress);
         PathInformationDatabase.INSTANCE.setPathsToClient(hostId);
         PathInformationDatabase.INSTANCE.setPathsToServer(hostId);
-        Util.log("general", String.format("Took %s ms to handle Update Directory for Client %s", System.currentTimeMillis() - tik, flClientCID));
+        Util.log("overhead.csv", String.format("controller,update_directory,%s", System.currentTimeMillis() - tik));
+//        Util.log("general", String.format("Took %s ms to handle Update Directory for Client %s", , flClientCID));
     }
 
     private void handleClientToServerPath(String clientID, long time) {
