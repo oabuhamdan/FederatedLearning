@@ -1,7 +1,5 @@
 package edu.uta.flowsched;
 
-import org.onlab.util.DataRateUnit;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,10 +21,13 @@ public class SetupPath {
             Util.log("general", String.format("Client %s has no paths yet", flHost.getFlClientCID()));
             return;
         }
-        PathRulesInstaller.INSTANCE.installPathRules(flHost.mac(), clientToServerPath.get());
+        PathRulesInstaller.INSTANCE.installPathRules(flHost, clientToServerPath.get());
 
-        long capacityModelWillOccupy = getCapacityModelWillOccupy(clientToServerPath.get());
-        Util.log("general", String.format("C2S Reserved %s Mbps for Client %s ", (double) capacityModelWillOccupy / DataRateUnit.MBPS.multiplier(), flHost.getFlClientCID()));
+//        long capacityModelWillOccupy = getCapacityModelWillOccupy(clientToServerPath.get());
+        clientToServerPath.get().reserveCapacity(flHost);
+        scheduleCapacityRelease(clientToServerPath.get(), flHost);
+
+//        Util.log("general", String.format("C2S Reserved %s Mbps for Client %s ", (double) capacityModelWillOccupy / DataRateUnit.MBPS.multiplier(), flHost.getFlClientCID()));
 
         Util.log("overhead.csv", String.format("controller,c2s_path,%s", System.currentTimeMillis() - tik));
     }
@@ -40,11 +41,13 @@ public class SetupPath {
                     Util.log("general", String.format("Client %s has no paths yet", flHost.getFlClientCID()));
                     continue;
                 }
-                PathRulesInstaller.INSTANCE.installPathRules(flHost.mac(), serverToClientPath.get());
+                PathRulesInstaller.INSTANCE.installPathRules(flHost, serverToClientPath.get());
 
-                long capacityModelWillOccupy = getCapacityModelWillOccupy(serverToClientPath.get());
+//                long capacityModelWillOccupy = getCapacityModelWillOccupy(serverToClientPath.get());
+                serverToClientPath.get().reserveCapacity(flHost);
+                scheduleCapacityRelease(serverToClientPath.get(), flHost);
 
-                Util.log("general", String.format("S2C Reserved %s Mbps for Client %s ", (double) capacityModelWillOccupy / DataRateUnit.MBPS.multiplier(), flHost.getFlClientCID()));
+//                Util.log("general", String.format("S2C Reserved %s Mbps for Client %s ", (double) capacityModelWillOccupy / DataRateUnit.MBPS.multiplier(), flHost.getFlClientCID()));
             }
 //            if (serverToClientsNetworkOptimizer == null || allPaths.values().stream().anyMatch(List::isEmpty)) {
 //                Util.logger.info("Recalculating Setup for Google OR");
@@ -63,17 +66,14 @@ public class SetupPath {
         }
     }
 
-    private static long getCapacityModelWillOccupy(MyPath path) {
-        MyLink bottleneckLink = path.getBottleneckLink(); //
-        long fairShare = bottleneckLink.getDefaultCapacity() / (bottleneckLink.getFlowsUsingLink().size() + 1);
-        long capacityModelWillOccupy = Math.min(bottleneckLink.getEstimatedFreeCapacity(), fairShare);
-        path.reserveCapacity(capacityModelWillOccupy);
-        scheduleCapacityRelease(path, capacityModelWillOccupy);
-        return capacityModelWillOccupy;
-    }
+//    private static long getCapacityModelWillOccupy(MyPath path) {
+//        path.reserveCapacity();
+//        scheduleCapacityRelease(path, capacityModelWillOccupy);
+//        return capacityModelWillOccupy;
+//    }
 
-    private static void scheduleCapacityRelease(MyPath path, long capacityModelWillOccupy) {
-        Runnable task = () -> path.releaseCapacity(capacityModelWillOccupy);
+    private static void scheduleCapacityRelease(MyPath path, FLHost flHost) {
+        Runnable task = () -> path.releaseCapacity(flHost);
         scheduler.schedule(task, Util.POLL_FREQ, TimeUnit.SECONDS);
     }
 }

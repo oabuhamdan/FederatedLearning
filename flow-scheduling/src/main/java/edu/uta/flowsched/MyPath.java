@@ -23,9 +23,14 @@ public class MyPath extends DefaultPath {
     }
 
     public MyLink getBottleneckLink() {
-        return this.bottleneckLink == null? (MyLink) links().get(links().size() / 2) : this.bottleneckLink;
+        return (MyLink) links().stream().filter(link -> !link.type().equals(Type.EDGE))
+                .min(Comparator.comparing(link -> ((MyLink) link).getEstimatedFreeCapacity()))
+                .orElse(links().get(0));
+//        return this.bottleneckLink == null? (MyLink) links().get(links().size() / 2) : this.bottleneckLink;
     }
-
+    public long getFairShareCapacity() {
+        return links().stream().mapToLong(link -> ((MyLink)link).getFairShareCapacity()).min().orElse(0);
+    }
     public void updateBottleneckLink() {
         this.bottleneckLink = (MyLink) links().stream().filter(link -> !link.type().equals(Type.EDGE))
                 .min(Comparator.comparing(link -> ((MyLink) link).getEstimatedFreeCapacity()))
@@ -36,17 +41,21 @@ public class MyPath extends DefaultPath {
         return availableCapacity;
     }
 
-    public void reserveCapacity(long capacity) {
+    public void reserveCapacity(FLHost flHost) {
+        MyLink bottleneckLink = this.getBottleneckLink();
+//        long bottleneckFairShare = bottleneckLink.getDefaultCapacity() / (bottleneckLink.getActiveFlows() + 1);
+        long freeCapacity = bottleneckLink.getEstimatedFreeCapacity();
+        long capacityToOccupy = freeCapacity / bottleneckLink.getActiveFlows();
         for (Link link : this.links()) {
             if (!Type.EDGE.equals(link.type()))
-                ((MyLink) link).reserveCapacity(capacity);
+                ((MyLink) link).reserveCapacity(capacityToOccupy, flHost);
         }
     }
 
-    public void releaseCapacity(long capacity) {
+    public void releaseCapacity(FLHost flHost) {
         for (Link link : this.links()) {
             if (!Type.EDGE.equals(link.type()))
-                ((MyLink) link).releaseCapacity(capacity);
+                ((MyLink) link).releaseCapacity(flHost);
         }
     }
 

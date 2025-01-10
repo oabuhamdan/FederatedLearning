@@ -1,39 +1,55 @@
 package edu.uta.flowsched;
 
-import org.onlab.util.DataRateUnit;
 import org.onosproject.net.DefaultLink;
 import org.onosproject.net.Link;
 import org.onosproject.net.flow.FlowEntry;
 import org.onosproject.net.provider.ProviderId;
 
+import java.io.Serializable;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
-public class MyLink extends DefaultLink {
+public class MyLink extends DefaultLink implements Serializable {
     private static final ProviderId PID = new ProviderId("flowsched", "edu.uta.flowsched", true);
 
     private Set<FlowEntry> flowsUsingLink;
+    private final AtomicInteger activeFlows;
     private long defaultCapacity;
-    private long currentThroughput;
+    private final AtomicLong currentThroughput;
     private long lastUpdated;
     private double delay;
-    private boolean congested;
-
-    private long reservedCapacity;
+    private final AtomicLong reservedCapacity;
+    private final ConcurrentHashMap<FLHost, Long> rateReservedPerHost;
 
     public MyLink(Link link) {
         super(PID, link.src(), link.dst(), link.type(), link.state(), link.annotations());
         this.lastUpdated = System.currentTimeMillis();
-        long defaultCapacity;
-//        if (link.src().elementId().toString().matches("of:00000000000001\\d{2}") && link.dst().elementId().toString().matches("of:00000000000001\\d{2}"))
-//            defaultCapacity = 1_000_000000; // 1Gbps for core switches
-//        else
-//            defaultCapacity = 100_000000; //  100Mbps
-        setDefaultCapacity(100_000000);
-        this.currentThroughput = 0;
+        this.defaultCapacity = 100_000000;
+        this.currentThroughput = new AtomicLong(0);
         this.delay = 0;
-        this.congested = false;
-        this.reservedCapacity = 0;
+        this.reservedCapacity = new AtomicLong(0);
+        this.activeFlows = new AtomicInteger(1);
         this.flowsUsingLink = new HashSet<>();
+        this.rateReservedPerHost = new ConcurrentHashMap<>();
+    }
+
+    public int getActiveFlows() {
+        return activeFlows.get();
+    }
+
+    public ConcurrentHashMap<FLHost, Long> getRateReservedPerHost() {
+        return rateReservedPerHost;
+    }
+
+    public void increaseActiveFlows() {
+        this.activeFlows.getAndIncrement();
+    }
+
+    public void decreaseActiveFlows() {
+        if (this.activeFlows.decrementAndGet() < 1)
+            this.activeFlows.set(1);
     }
 
     public long getDefaultCapacity() {
@@ -45,21 +61,15 @@ public class MyLink extends DefaultLink {
     }
 
     public long getEstimatedFreeCapacity() {
-        return getDefaultCapacity() - getCurrentThroughput() - getReservedCapacity();
-    }
-
-    private void setEstimatedFreeCapacity(long estimatedFreeCapacity) {
-        if (estimatedFreeCapacity <= 0.1 * this.defaultCapacity) {
-            this.congested = true;
-        }
+        return Math.max(getDefaultCapacity() - getCurrentThroughput() - getReservedCapacity(), 0);
     }
 
     public long getCurrentThroughput() {
-        return currentThroughput;
+        return currentThroughput.get();
     }
 
     public void setCurrentThroughput(long currentThroughput) {
-        this.currentThroughput = currentThroughput;
+        this.currentThroughput.set(currentThroughput);
     }
 
     public long getLastUpdated() {
@@ -84,18 +94,21 @@ public class MyLink extends DefaultLink {
 
 
     public long getReservedCapacity() {
-        return reservedCapacity;
+        return reservedCapacity.get();
     }
 
-    public void setReservedCapacity(long reservedCapacity) {
+    public void reserveCapacity(long requestedBandwidth, FLHost flHost) {
+        double availableBandwidth = getEstimatedFreeCapacity();
+        long reservation = (long) Math.min(requestedBandwidth, availableBandwidth);
+        this.reservedCapacity.addAndGet(reservation);
+        rateReservedPerHost.put(flHost, reservation);
+        increaseActiveFlows();
     }
 
-    public void reserveCapacity(long size) {
-        this.reservedCapacity += size;
-    }
-
-    public void releaseCapacity(long size) {
-        this.reservedCapacity -= size;
+    public void releaseCapacity(FLHost flHost) {
+        long size = rateReservedPerHost.remove(flHost);
+        if (this.reservedCapacity.addAndGet(-size) <= 0)
+            this.reservedCapacity.set(0);
     }
 
     public Set<FlowEntry> getFlowsUsingLink() {
@@ -106,4 +119,10 @@ public class MyLink extends DefaultLink {
         this.flowsUsingLink.clear();
         this.flowsUsingLink.addAll(flowsUsingLink);
     }
+
+    public long getFairShareCapacity() {
+        if (activeFlows.get() == 0) return getEstimatedFreeCapacity();
+        return getEstimatedFreeCapacity() / activeFlows.get();
+    }
+
 }

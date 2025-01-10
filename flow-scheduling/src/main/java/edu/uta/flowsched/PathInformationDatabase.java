@@ -9,6 +9,7 @@ import org.onosproject.store.service.WallClockTimestamp;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -16,7 +17,7 @@ import java.util.stream.Stream;
 
 public class PathInformationDatabase {
     public static final PathInformationDatabase INSTANCE = new PathInformationDatabase();
-    private static ScheduledExecutorService executorService;
+    private static ExecutorService executorService;
 
     private EventuallyConsistentMap<HostId, List<MyPath>> CLIENT_TO_SERVER_PATHS;
     private EventuallyConsistentMap<HostId, List<MyPath>> SERVER_TO_CLIENT_PATHS;
@@ -36,8 +37,7 @@ public class PathInformationDatabase {
                 .withTimestampProvider((k, v) -> new WallClockTimestamp())
                 .withSerializer(mySerializer).build();
 
-        executorService = Executors.newSingleThreadScheduledExecutor();
-        executorService.scheduleAtFixedRate(this::updateBottleneckPath, 2, 2, TimeUnit.SECONDS);
+        executorService = Executors.newCachedThreadPool();
     }
 
     protected void deactivate() {
@@ -72,10 +72,9 @@ public class PathInformationDatabase {
                 .forEach(path -> SERVER_TO_CLIENT_PATHS.get(hostId).add(path));
     }
 
-    private void updateBottleneckPath() {
-        Stream.concat(
-                CLIENT_TO_SERVER_PATHS.values().stream().flatMap(List::stream),
-                SERVER_TO_CLIENT_PATHS.values().stream().flatMap(List::stream)
-        ).forEach(MyPath::updateBottleneckLink);
+    public void updateBottleneckPath() {
+//        Util.log("general", "Updating Bottleneck Links");
+        executorService.submit(() -> CLIENT_TO_SERVER_PATHS.values().forEach(myPaths -> myPaths.forEach(MyPath::updateBottleneckLink)));
+        executorService.submit(() -> SERVER_TO_CLIENT_PATHS.values().forEach(myPaths -> myPaths.forEach(MyPath::updateBottleneckLink)));
     }
 }

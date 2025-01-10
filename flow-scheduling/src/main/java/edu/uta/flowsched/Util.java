@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.*;
 import java.util.stream.StreamSupport;
 
@@ -25,7 +26,7 @@ public class Util {
     static final Host SERVER_HOST = Services.hostService.getHost(HostId.hostId(FL_SERVER_MAC));
     private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(ClientInformationDatabase.class);
 
-    static HashMap<String, Logger> LOGGERS = new HashMap<>();
+    final static ConcurrentHashMap<String, Logger> LOGGERS = new ConcurrentHashMap<>();
 
 
     private static int getPollFreq() {
@@ -45,7 +46,6 @@ public class Util {
     public static long BpsToMbps(Number num) {
         return num.longValue() / (1024 * 1024);
     }
-
 
 
     public static String formatLink(Link link) {
@@ -88,12 +88,11 @@ public class Util {
         return stringBuilder.toString();
     }
 
-    static void log(String loggerName, String message){
-        if (LOGGERS.containsKey(loggerName)){
-            LOGGERS.get(loggerName).info(message);
-        }else {
+    static void log(String loggerName, String message) {
+        if (!LOGGERS.containsKey(loggerName)) {
             try {
                 Logger logger = Logger.getLogger(loggerName);
+                LOGGERS.put(loggerName, logger);
                 FileHandler fh = new FileHandler(String.format("/home/osama/flow_sched_logs/%s.log", loggerName));
                 logger.setUseParentHandlers(false);
                 logger.addHandler(fh);
@@ -103,12 +102,10 @@ public class Util {
                         return logRecord.getMessage() + "\n";
                     }
                 });
-                LOGGERS.put(loggerName, logger);
-                logger.info(message);
-            }
-            catch (Exception e){
+            } catch (Exception e) {
                 LOGGER.error(e.getMessage());
             }
         }
+        LOGGERS.get(loggerName).info(message);
     }
 }

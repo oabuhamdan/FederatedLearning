@@ -3,42 +3,40 @@ package edu.uta.flowsched;
 
 import org.onlab.util.KryoNamespace;
 import org.onosproject.net.ConnectPoint;
-import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.Link;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.PortStatistics;
-import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleEvent;
+import org.onosproject.net.flow.FlowRuleListener;
 import org.onosproject.net.flow.instructions.Instruction;
 import org.onosproject.net.flow.instructions.Instructions;
 import org.onosproject.store.serializers.KryoNamespaces;
 import org.onosproject.store.service.EventuallyConsistentMap;
 import org.onosproject.store.service.WallClockTimestamp;
 
-import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.onosproject.net.device.DeviceEvent.Type.PORT_STATS_UPDATED;
 
 public class LinkInformationDatabase {
 
     public static final LinkInformationDatabase INSTANCE = new LinkInformationDatabase();
-    private ScheduledExecutorService executorService;
-
     private EventuallyConsistentMap<Link, MyLink> LINK_INFORMATION_MAP;
     private LinkThroughputWatcher linkThroughputWatcher;
-
+    private InternalFlowRuleListener internalFlowRuleListener;
 
     protected void activate() {
         linkThroughputWatcher = new LinkThroughputWatcher();
-        executorService = Executors.newSingleThreadScheduledExecutor();
+        internalFlowRuleListener = new InternalFlowRuleListener();
 
         Services.deviceService.addListener(linkThroughputWatcher);
+        Services.flowRuleService.addListener(internalFlowRuleListener);
 
         KryoNamespace.Builder mySerializer = KryoNamespace.newBuilder().register(KryoNamespaces.API)
                 .register(Link.class)
@@ -55,12 +53,11 @@ public class LinkInformationDatabase {
             LINK_INFORMATION_MAP.put(link, new MyLink(link));
         }
 
-        executorService.scheduleAtFixedRate(this::updateFlowsPerLink, Util.POLL_FREQ, Util.POLL_FREQ, TimeUnit.SECONDS);
     }
 
     protected void deactivate() {
         Services.deviceService.removeListener(linkThroughputWatcher);
-        executorService.shutdownNow();
+        Services.flowRuleService.removeListener(internalFlowRuleListener);
         LINK_INFORMATION_MAP.clear();
     }
 
@@ -88,19 +85,20 @@ public class LinkInformationDatabase {
     public Collection<MyLink> getAllLinkInformation() {
         return LINK_INFORMATION_MAP.values();
     }
-
-    // Save flows per each link
-    private void updateFlowsPerLink() {
-        for (Link link : Services.linkService.getActiveLinks()) {
-            Iterable<FlowEntry> flowEntries = Services.flowRuleService.getFlowEntriesByState(link.src().deviceId(), FlowEntry.FlowEntryState.ADDED);
-            Set<FlowEntry> entries = StreamSupport.stream(flowEntries.spliterator(), false)
-                    .filter(flowEntry -> flowEntry.treatment().allInstructions().stream()
-                            .filter(instruction -> instruction.type() == Instruction.Type.OUTPUT)
-                            .map(instruction -> (Instructions.OutputInstruction) instruction)
-                            .anyMatch(outputInstruction -> link.src().port().equals(outputInstruction.port()))
-                    )
-                    .collect(Collectors.toSet());
-            getLinkInformation(link).setFlowsUsingLink(entries);
+    private class InternalFlowRuleListener implements FlowRuleListener {
+        @Override
+        public void event(FlowRuleEvent event) {
+            if (event.type().equals(FlowRuleEvent.Type.RULE_REMOVED)) {
+                FlowRule rule = event.subject();
+                Optional<Instructions.OutputInstruction> outputInstruction = rule.treatment().allInstructions().stream()
+                        .filter(instruction -> instruction.type() == Instruction.Type.OUTPUT)
+                        .map(instruction -> (Instructions.OutputInstruction) instruction)
+                        .findAny();
+                if (outputInstruction.isPresent()) {
+                    Set<Link> links = Services.linkService.getEgressLinks(new ConnectPoint(rule.deviceId(), outputInstruction.get().port()));
+                    links.forEach(link -> getLinkInformation(link).decreaseActiveFlows());
+                }
+            }
         }
     }
 

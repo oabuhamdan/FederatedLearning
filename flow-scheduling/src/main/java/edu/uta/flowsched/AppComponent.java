@@ -21,6 +21,8 @@ import org.osgi.service.component.annotations.Deactivate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+
 /**
  * Skeletal ONOS application component.
  */
@@ -35,11 +37,27 @@ public class AppComponent {
     @Activate
     protected void activate() {
 //        OrToolsLoader.loadNativeLibraries();
+        createLogDir();
         LinkInformationDatabase.INSTANCE.activate();
         PathInformationDatabase.INSTANCE.activate();
         ClientInformationDatabase.INSTANCE.activate();
         ZeroMQServer.INSTANCE.activate();
         log.info("Started");
+    }
+
+    private void createLogDir() {
+        String logDirectory = "/home/osama/flow_sched_logs/";
+        File directory = new File(logDirectory);
+        if (!directory.exists()) {
+            boolean dirCreated = directory.mkdirs();
+            if (dirCreated) {
+                log.info("Log directory created.");
+            } else {
+                log.error("Failed to create log directory.");
+            }
+        } else {
+            log.info("Log directory already exists.");
+        }
     }
 
     @Deactivate

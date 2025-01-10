@@ -17,7 +17,7 @@ public class ZeroMQServer {
 
     private static final ExecutorService executorService = Executors.newCachedThreadPool();
     private static final ClientInformationDatabase clientInformationDatabase = ClientInformationDatabase.INSTANCE;
-    private static int ROUND = 0;
+    private static int ROUND = 1;
     ZMQ.Socket socket;
     ZMQ.Context context;
 
@@ -51,7 +51,8 @@ public class ZeroMQServer {
                 JSONObject clientInfo = (JSONObject) jsonMessage;
                 updateDirectory(clientInfo);
             } else if (messageType == MessageType.SERVER_TO_CLIENTS) {
-                Util.log("general", String.format("******* Starting Round: %s *******", ROUND++));
+                Util.log("general", String.format("************ Starting Round: %s ************", ROUND++));
+                Util.log("flow_debug", String.format("************ Starting Round: %s ************", ROUND));
                 JSONArray clients = (JSONArray) jsonMessage;
                 handleServerToClientsPaths(clients);
             } else if (messageType == MessageType.CLIENT_TO_SERVER) {
