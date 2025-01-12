@@ -24,7 +24,7 @@ public class SetupPath {
         PathRulesInstaller.INSTANCE.installPathRules(flHost, clientToServerPath.get());
 
 //        long capacityModelWillOccupy = getCapacityModelWillOccupy(clientToServerPath.get());
-        clientToServerPath.get().reserveCapacity(flHost);
+//        clientToServerPath.get().reserveCapacity(flHost);
         scheduleCapacityRelease(clientToServerPath.get(), flHost);
 
 //        Util.log("general", String.format("C2S Reserved %s Mbps for Client %s ", (double) capacityModelWillOccupy / DataRateUnit.MBPS.multiplier(), flHost.getFlClientCID()));
@@ -44,7 +44,7 @@ public class SetupPath {
                 PathRulesInstaller.INSTANCE.installPathRules(flHost, serverToClientPath.get());
 
 //                long capacityModelWillOccupy = getCapacityModelWillOccupy(serverToClientPath.get());
-                serverToClientPath.get().reserveCapacity(flHost);
+//                serverToClientPath.get().reserveCapacity(flHost);
                 scheduleCapacityRelease(serverToClientPath.get(), flHost);
 
 //                Util.log("general", String.format("S2C Reserved %s Mbps for Client %s ", (double) capacityModelWillOccupy / DataRateUnit.MBPS.multiplier(), flHost.getFlClientCID()));
@@ -73,7 +73,7 @@ public class SetupPath {
 //    }
 
     private static void scheduleCapacityRelease(MyPath path, FLHost flHost) {
-        Runnable task = () -> path.releaseCapacity(flHost);
-        scheduler.schedule(task, Util.POLL_FREQ, TimeUnit.SECONDS);
+//        Runnable task = () -> path.releaseCapacity(flHost);
+//        scheduler.schedule(task, Util.POLL_FREQ, TimeUnit.SECONDS);
     }
 }

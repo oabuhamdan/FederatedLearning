@@ -7,8 +7,10 @@ import org.onlab.packet.MacAddress;
 import org.onosproject.net.HostId;
 import org.zeromq.ZMQ;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 
 public class ZeroMQServer {
@@ -80,6 +82,7 @@ public class ZeroMQServer {
 
     private void handleClientToServerPath(String clientID, long time) {
         FLHost host = clientInformationDatabase.getHostByFLCID(clientID);
+
         SetupPath.clientToServer(host);
     }
 
@@ -92,7 +95,9 @@ public class ZeroMQServer {
         StringBuilder sb = new StringBuilder();
         hosts.forEach(host -> sb.append(host.getFlClientCID()).append(","));
         Util.log("general", String.format("** Server to Client Handing For: %s **", sb));
-        SetupPath.serverToClient(hosts);
+        Map<FLHost, List<MyPath>> paths = new HashMap<>(hashSet.size());
+        hosts.forEach(host -> paths.put(host, PathInformationDatabase.INSTANCE.getPathsToClient(host)));
+        GreedyFlowScheduler.INSTANCE.callS2C(paths);
     }
 
 

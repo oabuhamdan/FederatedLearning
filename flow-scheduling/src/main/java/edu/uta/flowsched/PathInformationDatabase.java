@@ -74,7 +74,7 @@ public class PathInformationDatabase {
 
     public void updateBottleneckPath() {
 //        Util.log("general", "Updating Bottleneck Links");
-        executorService.submit(() -> CLIENT_TO_SERVER_PATHS.values().forEach(myPaths -> myPaths.forEach(MyPath::updateBottleneckLink)));
-        executorService.submit(() -> SERVER_TO_CLIENT_PATHS.values().forEach(myPaths -> myPaths.forEach(MyPath::updateBottleneckLink)));
+//        executorService.submit(() -> CLIENT_TO_SERVER_PATHS.values().forEach(myPaths -> myPaths.forEach(MyPath::updateBottleneckLink)));
+//        executorService.submit(() -> SERVER_TO_CLIENT_PATHS.values().forEach(myPaths -> myPaths.forEach(MyPath::updateBottleneckLink)));
     }
 }

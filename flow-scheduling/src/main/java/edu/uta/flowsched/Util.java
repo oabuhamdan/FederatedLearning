@@ -5,18 +5,10 @@ import org.onlab.packet.MacAddress;
 import org.onlab.util.DataRateUnit;
 import org.onosproject.cfg.ConfigProperty;
 import org.onosproject.net.*;
-import org.onosproject.net.flow.FlowEntry;
-import org.onosproject.net.flow.instructions.Instruction;
-import org.onosproject.net.flow.instructions.Instructions;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.*;
-import java.util.stream.StreamSupport;
 
 
 public class Util {
@@ -43,8 +35,8 @@ public class Util {
         return DataRateUnit.MBPS.toBitsPerSecond(num.longValue());
     }
 
-    public static long BpsToMbps(Number num) {
-        return num.longValue() / (1024 * 1024);
+    public static long bitToMbit(Number num) {
+        return num.longValue() / 1_000_000;
     }
 
 
@@ -81,10 +73,19 @@ public class Util {
     public static String pathFormat(Path path) {
         StringBuilder stringBuilder = new StringBuilder();
         for (Link link : path.links()) {
-            stringBuilder.append(link.src().elementId().toString().substring(15));
+            ElementId id = link.src().elementId();
+            if (id instanceof HostId) {
+                if (((HostId) id).mac() == Util.FL_SERVER_MAC)
+                    stringBuilder.append("FLServer");
+                else
+                    stringBuilder.append("FL#").append(ClientInformationDatabase.INSTANCE.getHostByHostID((HostId) id).getFlClientCID());
+            }
+            else {
+                stringBuilder.append(id.toString().substring(15));
+            }
             stringBuilder.append(" -> ");
         }
-        stringBuilder.append(path.dst().elementId().toString().substring(15));
+        stringBuilder.append("FL#").append(ClientInformationDatabase.INSTANCE.getHostByHostID(path.dst().hostId()).getFlClientCID());
         return stringBuilder.toString();
     }
 

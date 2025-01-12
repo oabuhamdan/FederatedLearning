@@ -23,17 +23,17 @@ public class ReserveCapacity {
 
         Meter meter = Services.meterService.submit(ops.add());
 
-        for (Link link : Services.linkService.getDeviceEgressLinks(deviceId)) {
-            for (FlowEntry entry : LinkInformationDatabase.INSTANCE.getLinkInformation(link).getFlowsUsingLink()) {
-                TrafficTreatment trafficTreatment = DefaultTrafficTreatment.builder().meter(meter.id()).addTreatment(entry.treatment()).build();
-                TrafficSelector selector = entry.selector();
-                FlowRule flowRule = DefaultFlowEntry.builder().withTreatment(trafficTreatment)
-                        .withSelector(selector).withPriority(entry.priority() + 1)
-                        .makeTemporary(entry.timeout())
-                        .fromApp(Services.appId)
-                        .forDevice(entry.deviceId()).build();
-                Services.flowRuleService.applyFlowRules(flowRule);
-            }
-        }
+//        for (Link link : Services.linkService.getDeviceEgressLinks(deviceId)) {
+//            for (FlowEntry entry : LinkInformationDatabase.INSTANCE.getLinkInformation(link).getFlowsUsingLink()) {
+//                TrafficTreatment trafficTreatment = DefaultTrafficTreatment.builder().meter(meter.id()).addTreatment(entry.treatment()).build();
+//                TrafficSelector selector = entry.selector();
+//                FlowRule flowRule = DefaultFlowEntry.builder().withTreatment(trafficTreatment)
+//                        .withSelector(selector).withPriority(entry.priority() + 1)
+//                        .makeTemporary(entry.timeout())
+//                        .fromApp(Services.appId)
+//                        .forDevice(entry.deviceId()).build();
+//                Services.flowRuleService.applyFlowRules(flowRule);
+//            }
+//        }
     }
 }

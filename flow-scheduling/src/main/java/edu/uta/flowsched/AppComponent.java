@@ -41,6 +41,7 @@ public class AppComponent {
         LinkInformationDatabase.INSTANCE.activate();
         PathInformationDatabase.INSTANCE.activate();
         ClientInformationDatabase.INSTANCE.activate();
+        GreedyFlowScheduler.INSTANCE.activate();
         ZeroMQServer.INSTANCE.activate();
         log.info("Started");
     }
@@ -66,6 +67,7 @@ public class AppComponent {
         PathInformationDatabase.INSTANCE.deactivate();
         ZeroMQServer.INSTANCE.deactivate();
         ClientInformationDatabase.INSTANCE.deactivate();
+        GreedyFlowScheduler.INSTANCE.deactivate();
         log.info("Stopped");
     }
 }

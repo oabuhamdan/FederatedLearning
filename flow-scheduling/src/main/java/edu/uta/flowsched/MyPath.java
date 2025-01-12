@@ -7,58 +7,44 @@ import org.onosproject.net.Path;
 import org.onosproject.net.provider.ProviderId;
 
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class MyPath extends DefaultPath {
     private static final ProviderId PID = new ProviderId("flowsched", "edu.uta.flowsched", true);
+    private Set<Link> linksWithoutEdge;
     private MyLink bottleneckLink;
     private long availableCapacity;
     private double delay;
     private long lastUpdated;
 
+    private long cachedCurrentFairShare;
+    private long cachedProjectedFairShare;
+
 
     public MyPath(Path path) {
         super(PID, path.links().stream().map(LinkInformationDatabase.INSTANCE::getLinkInformation)
                 .collect(Collectors.toList()), new ScalarWeight(1));
+        this.linksWithoutEdge = links().stream().filter(link -> !link.type().equals(Type.EDGE)).collect(Collectors.toSet());
     }
 
-    public MyLink getBottleneckLink() {
-        return (MyLink) links().stream().filter(link -> !link.type().equals(Type.EDGE))
-                .min(Comparator.comparing(link -> ((MyLink) link).getEstimatedFreeCapacity()))
-                .orElse(links().get(0));
-//        return this.bottleneckLink == null? (MyLink) links().get(links().size() / 2) : this.bottleneckLink;
-    }
-    public long getFairShareCapacity() {
-        return links().stream().mapToLong(link -> ((MyLink)link).getFairShareCapacity()).min().orElse(0);
-    }
-    public void updateBottleneckLink() {
-        this.bottleneckLink = (MyLink) links().stream().filter(link -> !link.type().equals(Type.EDGE))
-                .min(Comparator.comparing(link -> ((MyLink) link).getEstimatedFreeCapacity()))
-                .orElse(links().get(0));
+    public Set<Link> linksNoEdge() {
+        return linksWithoutEdge;
     }
 
-    public long getAvailableCapacity() {
-        return availableCapacity;
+    public Set<FLHost> addFlow(FLHost client) {
+        Set<FLHost> affectedClients = new HashSet<>();
+        linksNoEdge().forEach(link -> affectedClients.addAll(((MyLink) link).addFlow(client)));
+        return affectedClients;
     }
 
-    public void reserveCapacity(FLHost flHost) {
-        MyLink bottleneckLink = this.getBottleneckLink();
-//        long bottleneckFairShare = bottleneckLink.getDefaultCapacity() / (bottleneckLink.getActiveFlows() + 1);
-        long freeCapacity = bottleneckLink.getEstimatedFreeCapacity();
-        long capacityToOccupy = freeCapacity / bottleneckLink.getActiveFlows();
-        for (Link link : this.links()) {
-            if (!Type.EDGE.equals(link.type()))
-                ((MyLink) link).reserveCapacity(capacityToOccupy, flHost);
-        }
+    public Set<FLHost> removeFlow(FLHost client) {
+        Set<FLHost> affectedClients = new HashSet<>();
+        linksNoEdge().forEach(link -> affectedClients.addAll(((MyLink) link).removeFlow(client)));
+        return affectedClients;
     }
-
-    public void releaseCapacity(FLHost flHost) {
-        for (Link link : this.links()) {
-            if (!Type.EDGE.equals(link.type()))
-                ((MyLink) link).releaseCapacity(flHost);
-        }
-    }
-
 
     public double getDelay() {
         return delay;
@@ -68,24 +54,29 @@ public class MyPath extends DefaultPath {
         this.delay = delay;
     }
 
+    public long getCurrentFairShare() {
+        boolean currentCacheNotValid = linksNoEdge().stream().anyMatch(link -> !((MyLink)link).isCurrentCacheValid());
+        if (currentCacheNotValid || cachedCurrentFairShare == 0) {
+            cachedCurrentFairShare = linksNoEdge().stream()
+                    .mapToLong(link -> ((MyLink) link).getCurrentFairShare())
+                    .min()
+                    .orElse(0);
+        }
+        return cachedCurrentFairShare;
+    }
 
-//    @Override
-//    public boolean equals(Object obj) {
-//        if (this == obj) {
-//            return true;
-//        }
-//        if (obj instanceof Path) {
-//            final Path other = (Path) obj;
-//            return Objects.equals(
-//                    this.links().subList(2, this.links().size() - 1),
-//                    other.links().subList(2, this.links().size() - 1)
-//            );
-//        }
-//        return false;
-//    }
-//
-//    @Override
-//    public int hashCode() {
-//        return this.links().subList(2, this.links().size() - 1).hashCode();
-//    }
+    public long getProjectedFairShare() {
+        boolean projectedCacheNotValid = linksNoEdge().stream().anyMatch(link -> !((MyLink)link).isProjectedCacheValid());
+        if (projectedCacheNotValid || cachedProjectedFairShare == 0) {
+            cachedProjectedFairShare = linksNoEdge().stream()
+                    .mapToLong(link -> ((MyLink) link).getProjectedFairShare())
+                    .min()
+                    .orElse(0);
+        }
+        return cachedProjectedFairShare;
+    }
+
+    public MyLink getBottleneckLink() { // TODO: Remove
+        return (MyLink) links().get(0);
+    }
 }
