@@ -51,16 +51,9 @@ public class Util {
     }
 
 
-    public static long ageInMilliSeconds(long t) {
-        return System.currentTimeMillis() - t;
-    }
-
     public static int ageInSeconds(long t) {
-        if (t == 0) {
-            return Integer.MAX_VALUE;
-        } else {
-            return (int) (ageInMilliSeconds(t) / 1e3);
-        }
+        long ageInMillis = System.currentTimeMillis() - t;
+        return (ageInMillis > Integer.MAX_VALUE * 1000L) ? Integer.MAX_VALUE : (int) (ageInMillis / 1000);
     }
 
     public static double safeDivision(Number num1, Number num2) {
@@ -78,35 +71,41 @@ public class Util {
                 if (((HostId) id).mac() == Util.FL_SERVER_MAC)
                     stringBuilder.append("FLServer");
                 else
-                    stringBuilder.append("FL#").append(ClientInformationDatabase.INSTANCE.getHostByHostID((HostId) id).getFlClientCID());
+                    stringBuilder.append("FL#").append(ClientInformationDatabase.INSTANCE.getHostByHostID((HostId) id).get().getFlClientCID());
             }
             else {
                 stringBuilder.append(id.toString().substring(15));
             }
             stringBuilder.append(" -> ");
         }
-        stringBuilder.append("FL#").append(ClientInformationDatabase.INSTANCE.getHostByHostID(path.dst().hostId()).getFlClientCID());
+        if (path.dst().hostId().mac() == Util.FL_SERVER_MAC)
+            stringBuilder.append("FLServer");
+        else
+            stringBuilder.append("FL#").append(ClientInformationDatabase.INSTANCE.getHostByHostID(path.dst().hostId()).get().getFlClientCID());
         return stringBuilder.toString();
     }
 
-    static void log(String loggerName, String message) {
-        if (!LOGGERS.containsKey(loggerName)) {
-            try {
-                Logger logger = Logger.getLogger(loggerName);
-                LOGGERS.put(loggerName, logger);
-                FileHandler fh = new FileHandler(String.format("/home/osama/flow_sched_logs/%s.log", loggerName));
-                logger.setUseParentHandlers(false);
-                logger.addHandler(fh);
-                fh.setFormatter(new Formatter() {
-                    @Override
-                    public String format(LogRecord logRecord) {
-                        return logRecord.getMessage() + "\n";
-                    }
-                });
-            } catch (Exception e) {
-                LOGGER.error(e.getMessage());
+    static void log(String loggerNames, String message) {
+        String[] loggers = loggerNames.split(",");
+        for (String loggerName : loggers) {
+            if (!LOGGERS.containsKey(loggerName)) {
+                try {
+                    Logger logger = Logger.getLogger(loggerName);
+                    LOGGERS.put(loggerName, logger);
+                    FileHandler fh = new FileHandler(String.format("/home/osama/flow_sched_logs/%s.log", loggerName));
+                    logger.setUseParentHandlers(false);
+                    logger.addHandler(fh);
+                    fh.setFormatter(new Formatter() {
+                        @Override
+                        public String format(LogRecord logRecord) {
+                            return logRecord.getMessage() + "\n";
+                        }
+                    });
+                } catch (Exception e) {
+                    LOGGER.error(e.getMessage());
+                }
             }
+            LOGGERS.get(loggerName).info(message);
         }
-        LOGGERS.get(loggerName).info(message);
     }
 }

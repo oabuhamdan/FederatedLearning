@@ -43,6 +43,8 @@ public class AppCommand extends AbstractShellCommand {
             case "refresh-links":
                 LinkInformationDatabase.INSTANCE.refreshComponent();
                 break;
+            case "paths":
+                PathInformationDatabase.INSTANCE.printAll();
         }
     }
 
@@ -53,7 +55,7 @@ public class AppCommand extends AbstractShellCommand {
 
     void linkInfo() {
         for (MyLink link : LinkInformationDatabase.INSTANCE.getAllLinkInformation()) {
-            Util.log("link_util.csv", String.format("%s,%s,%s", Util.formatLink(link), link.getEstimatedFreeCapacity(), link.getCurrentThroughput()));
+            Util.log("link_util.csv", String.format("%s,%s,%s", Util.formatLink(link), link.getEstimatedFreeCapacity(), link.getThroughput()));
         }
         Util.log("link_util.csv", ",,");
     }

@@ -5,14 +5,13 @@ import org.onosproject.net.Link;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 public class PathFinder {
     // debug in the background
-    static ExecutorService executorService = Executors.newSingleThreadExecutor();
-    static TotalLoadComparator totalLoadComparator = new TotalLoadComparator();
 
     public static Optional<MyPath> getPathsToServer(FLHost host) {
         List<MyPath> paths = getEntries(PathInformationDatabase.INSTANCE.getPathsToServer(host));
@@ -30,9 +29,9 @@ public class PathFinder {
         return paths.isEmpty() ? Optional.empty() : Optional.ofNullable(paths.get(0));
     }
 
-    private static List<MyPath> getEntries(List<MyPath> paths) {
-        TotalLoadComparator totalLoadComparator = new TotalLoadComparator();
-        return paths.stream().sorted(totalLoadComparator).collect(Collectors.toList());
+    private static List<MyPath> getEntries(Set<MyPath> paths) {
+//        TotalLoadComparator totalLoadComparator = new TotalLoadComparator(paths, 0.6,0.3, 500);
+        return paths.stream().collect(Collectors.toList());
     }
 
     private static void debugPaths(FLHost flHost, String dir, List<MyPathDeepCopy> paths) {

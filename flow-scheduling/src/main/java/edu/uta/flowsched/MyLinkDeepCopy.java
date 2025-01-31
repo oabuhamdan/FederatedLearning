@@ -97,14 +97,14 @@ public class MyLinkDeepCopy {
     public static MyLinkDeepCopy deepCopy(MyLink link){
         MyLinkDeepCopy copy = new MyLinkDeepCopy();
         copy.setEstimatedFreeCapacity(link.getEstimatedFreeCapacity());
-        copy.setCurrentThroughput(link.getCurrentThroughput());
+        copy.setCurrentThroughput(link.getThroughput());
         copy.setReservedCapacity(link.getReservedCapacity());
         copy.setDefaultCapacity(link.getDefaultCapacity());
         copy.setType(link.type().toString());
         copy.setSrc(link.src().toString());
         copy.setDst(link.dst().toString());
         copy.setActiveFlows(link.getActiveFlows());
-        copy.setRateReservedPerHost(copyMap(link.getRateReservedPerHost()));
+//        copy.setRateReservedPerHost(copyMap(link.getRateReservedPerHost()));
         return copy;
     }
     private static HashMap<String, Long> copyMap(ConcurrentHashMap<FLHost, Long> original) {

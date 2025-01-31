@@ -38,10 +38,11 @@ public class AppComponent {
     protected void activate() {
 //        OrToolsLoader.loadNativeLibraries();
         createLogDir();
+//        OrToolsLoader.INSTANCE.loadNativeLibraries();
         LinkInformationDatabase.INSTANCE.activate();
         PathInformationDatabase.INSTANCE.activate();
         ClientInformationDatabase.INSTANCE.activate();
-        GreedyFlowScheduler.INSTANCE.activate();
+        GreedyFlowScheduler.activate();
         ZeroMQServer.INSTANCE.activate();
         log.info("Started");
     }
@@ -67,7 +68,7 @@ public class AppComponent {
         PathInformationDatabase.INSTANCE.deactivate();
         ZeroMQServer.INSTANCE.deactivate();
         ClientInformationDatabase.INSTANCE.deactivate();
-        GreedyFlowScheduler.INSTANCE.deactivate();
+        GreedyFlowScheduler.deactivate();
         log.info("Stopped");
     }
 }

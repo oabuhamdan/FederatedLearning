@@ -23,5 +23,7 @@
         <bundle>wrap:mvn:com.google.ortools/ortools-java/9.11.4210</bundle>
         <bundle>wrap:mvn:com.google.ortools/ortools-linux-x86-64/9.11.4210</bundle>
         <bundle>wrap:mvn:com.google.protobuf/protobuf-java/4.28.3</bundle>
+<!--        <bundle>wrap:mvn:org.jgrapht/jgrapht-core/1.5.2</bundle>-->
+<!--        <bundle>wrap:mvn:org.jgrapht/jgrapht-io/1.5.2</bundle>-->
     </feature>
 </features>

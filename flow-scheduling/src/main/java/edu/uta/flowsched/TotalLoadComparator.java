@@ -1,74 +1,120 @@
 package edu.uta.flowsched;
 
-import org.onosproject.net.Link;
+import java.util.*;
 
-import java.util.Comparator;
-import java.util.DoubleSummaryStatistics;
-import java.util.List;
+import static edu.uta.flowsched.Util.bitToMbit;
 
 public class TotalLoadComparator implements Comparator<MyPath> {
-    private static final double CAPACITY_WEIGHT = 0.5;
-    private static final double AVG_LOAD_WEIGHT = 0.2;
-    private static final double HOP_COUNT_WEIGHT = 0.3;
-    private static final int MAX_REASONABLE_HOPS = 10;
+    private final Collection<MyPath> paths;
+    private double maxFairShare;
+    private double maxFreeCap;
+    private double minFairShare;
+    private double minFreeCap;
+    private double maxHopCount;
+    private double minHopCount;
+
+    private double maxActiveFlows;
+    private double minActiveFlows;
+    private final double weightFairShare;
+    private final double weightHopCount;
+    private final double weightFreeCap;
+    private final double weightActiveFlows;
+    private final Map<MyPath, Long> projectedFairShare;
+    private final Map<MyPath, Long> pathFreeCapacity;
+    private final Map<MyPath, Double> activeFlows;
+
+    public TotalLoadComparator(Collection<MyPath> paths, double weightFairShare, double weightFreeCap, double weightHopCount, double weightActiveFlows) {
+        this.paths = paths;
+        this.projectedFairShare = new HashMap<>();
+        this.pathFreeCapacity = new HashMap<>();
+        this.activeFlows = new HashMap<>();
+        this.weightFairShare = weightFairShare;
+        this.weightHopCount = weightHopCount;
+        this.weightFreeCap = weightFreeCap;
+        this.weightActiveFlows = weightActiveFlows;
+
+        // Calculate Min-Max
+        this.minFairShare = Double.MAX_VALUE;
+        this.maxFairShare = Double.MIN_VALUE;
+
+        this.minFreeCap = Double.MAX_VALUE;
+        this.maxFreeCap = Double.MIN_VALUE;
+
+        this.maxHopCount = Double.MIN_VALUE;
+        this.minHopCount = Double.MAX_VALUE;
+
+        this.maxActiveFlows = Double.MIN_VALUE;
+        this.minActiveFlows = Double.MAX_VALUE;
 
 
-    public TotalLoadComparator() {
+        for (MyPath path : paths) {
+            long fairShare = path.getProjectedFairShare();
+            long freeCap = path.getBottleneckFreeCap();
+            double hopCount = path.linksNoEdge().size();
+            double activeFlows = path.getCurrentActiveFlows();
 
+            this.projectedFairShare.put(path, fairShare);
+            this.pathFreeCapacity.put(path, freeCap);
+            this.activeFlows.put(path, activeFlows);
+
+            this.minFairShare = Math.min(this.minFairShare, fairShare);
+            this.maxFairShare = Math.max(this.maxFairShare, fairShare);
+            this.minFreeCap = Math.min(this.minFreeCap, freeCap);
+            this.maxFreeCap = Math.max(this.maxFreeCap, freeCap);
+            this.maxHopCount = Math.max(this.maxHopCount, hopCount);
+            this.minHopCount = Math.min(this.minHopCount, hopCount);
+            this.maxActiveFlows = Math.max(this.maxActiveFlows, activeFlows);
+            this.minActiveFlows = Math.min(this.minActiveFlows, activeFlows);
+        }
+    }
+
+    public double[] computeScore(MyPath path) {
+        long fairShare = this.projectedFairShare.get(path);
+        int hopCount = path.linksNoEdge().size();
+        double activeFlows = this.activeFlows.get(path);
+        double freeCapacity = this.pathFreeCapacity.get(path);
+
+        double normalizedFreeCap = (freeCapacity - minFreeCap) / (maxFreeCap - minFreeCap);
+        double normalizedFairShare = (fairShare - minFairShare) / (maxFairShare - minFairShare);
+        double normalizedHopCount = (maxHopCount - hopCount) / (maxHopCount - minHopCount);
+        double normalizedActiveFlows = (maxActiveFlows - activeFlows) / (maxActiveFlows - minActiveFlows);
+
+        double score = weightFairShare * normalizedFairShare + weightFreeCap * normalizedFreeCap + weightActiveFlows * activeFlows + weightHopCount * normalizedHopCount;
+        double[] values = {score, fairShare, freeCapacity, activeFlows, hopCount, normalizedFairShare, normalizedFreeCap, normalizedActiveFlows, normalizedHopCount};
+        return values;
     }
 
     @Override
     public int compare(MyPath path1, MyPath path2) {
-        double score1 = computeScore(path1);
-        double score2 = computeScore(path2);
+        double score1 = computeScore(path1)[0];
+        double score2 = computeScore(path2)[0];
 
         return Double.compare(score2, score1);
     }
 
-    public double computeScore(MyPath path) {
-        double normalizedBottleneckFreeCap = getNormalizedBottleneckScore(path);
-        double normalizedAverageFreeCap = getNormalizedAverageFreeCap(path);
-        double normalizedHopCount = getNormalizedHopCount(path);
-
-        return (normalizedBottleneckFreeCap * CAPACITY_WEIGHT)
-                + (normalizedAverageFreeCap * AVG_LOAD_WEIGHT)
-                + (normalizedHopCount * HOP_COUNT_WEIGHT);
-    }
 
     public String debugScore(MyPath path) {
-        double normalizedBottleneckFreeCap = getNormalizedBottleneckScore(path);
-        double normalizedAverageFreeCap = getNormalizedAverageFreeCap(path);
-        double normalizedHopCount = getNormalizedHopCount(path);
-
-        double total = (normalizedBottleneckFreeCap * CAPACITY_WEIGHT)
-                + (normalizedAverageFreeCap * AVG_LOAD_WEIGHT)
-                + (normalizedHopCount * HOP_COUNT_WEIGHT);
-        return String.format("\tScore is:  %s + %s + %s = %s", (normalizedBottleneckFreeCap * CAPACITY_WEIGHT)
-                , (normalizedAverageFreeCap * AVG_LOAD_WEIGHT)
-                , (normalizedHopCount * HOP_COUNT_WEIGHT), total);
+        double[] values = computeScore(path);
+        return String.format("\tScore is: %.2f, FairShare:%s, FreeCap:%s, ActiveFlows:%.2f HopCount:%s => %.2f*%.2f + %.2f*%.2f + %.2f*%.2f + %.2f*%.2f",
+                values[0], bitToMbit(values[1]), bitToMbit(values[2]), values[3], values[4],
+                weightFairShare, values[5], weightFreeCap, values[6], weightActiveFlows, values[7], weightHopCount, values[8]);
     }
 
-    private double getNormalizedHopCount(MyPath path) {
-        return 1 - path.links().size() / (double) MAX_REASONABLE_HOPS;
+    public double getMaxFairShare() {
+        return maxFairShare;
     }
 
-    private double getNormalizedBottleneckScore(MyPath path) {
-        MyLink bottleneckLink = path.getBottleneckLink();
-        long freeCap = bottleneckLink.getEstimatedFreeCapacity();
-        double fairShare = (double) freeCap / bottleneckLink.getActiveFlows();
-        return ((freeCap + fairShare) / 2) / bottleneckLink.getDefaultCapacity();
+    public double getMinFairShare() {
+        return minFairShare;
     }
 
-    private double getNormalizedAverageFreeCap(MyPath path) {
-        DoubleSummaryStatistics stats = new DoubleSummaryStatistics();
-        List<Link> links = path.links();
-        for (Link link : links) {
-            if (link.type().equals(Link.Type.EDGE))
-                continue;
-            MyLink myLink = (MyLink) link;
-            stats.accept((double) myLink.getEstimatedFreeCapacity() / myLink.getDefaultCapacity());
-        }
-
-        return stats.getAverage();
+    public double getMaxHopCount() {
+        return maxHopCount;
     }
+
+    public double getMinHopCount() {
+        return minHopCount;
+    }
+
+    //
 }

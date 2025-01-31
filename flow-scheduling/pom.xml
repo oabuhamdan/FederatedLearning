@@ -110,6 +110,16 @@
             <artifactId>ortools-linux-x86-64</artifactId>
             <version>9.11.4210</version>
         </dependency>
+        <dependency>
+            <groupId>org.jgrapht</groupId>
+            <artifactId>jgrapht-core</artifactId>
+            <version>1.5.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jgrapht</groupId>
+            <artifactId>jgrapht-io</artifactId>
+            <version>1.5.2</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -130,6 +140,7 @@
                 <artifactId>maven-bundle-plugin</artifactId>
                 <configuration>
                     <instructions>
+                        <_noimportjava>true</_noimportjava>
                         <Karaf-Commands>edu.uta.flowsched</Karaf-Commands>
                         <Bundle-NativeCode>
                             META-INF/native/libortools.so.9;

@@ -9,30 +9,32 @@ import org.onosproject.store.service.WallClockTimestamp;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class PathInformationDatabase {
     public static final PathInformationDatabase INSTANCE = new PathInformationDatabase();
     private static ExecutorService executorService;
 
-    private EventuallyConsistentMap<HostId, List<MyPath>> CLIENT_TO_SERVER_PATHS;
-    private EventuallyConsistentMap<HostId, List<MyPath>> SERVER_TO_CLIENT_PATHS;
+    private EventuallyConsistentMap<HostId, Set<MyPath>> CLIENT_TO_SERVER_PATHS;
+    private EventuallyConsistentMap<HostId, Set<MyPath>> SERVER_TO_CLIENT_PATHS;
 
     protected void activate() {
         KryoNamespace.Builder mySerializer = KryoNamespace.newBuilder().register(KryoNamespaces.API)
                 .register(MyLink.class)
                 .register(MyPath.class);
 
-        CLIENT_TO_SERVER_PATHS = Services.storageService.<HostId, List<MyPath>>eventuallyConsistentMapBuilder()
+        CLIENT_TO_SERVER_PATHS = Services.storageService.<HostId, Set<MyPath>>eventuallyConsistentMapBuilder()
                 .withName("CLIENT_TO_SERVER_PATHS")
                 .withTimestampProvider((k, v) -> new WallClockTimestamp())
                 .withSerializer(mySerializer).build();
 
-        SERVER_TO_CLIENT_PATHS = Services.storageService.<HostId, List<MyPath>>eventuallyConsistentMapBuilder()
+        SERVER_TO_CLIENT_PATHS = Services.storageService.<HostId, Set<MyPath>>eventuallyConsistentMapBuilder()
                 .withName("SERVER_TO_CLIENTS_PATHS")
                 .withTimestampProvider((k, v) -> new WallClockTimestamp())
                 .withSerializer(mySerializer).build();
@@ -46,30 +48,55 @@ public class PathInformationDatabase {
         SERVER_TO_CLIENT_PATHS.clear();
     }
 
-    public List<MyPath> getPathsToServer(FLHost host) {
-        List<MyPath> paths = Optional.ofNullable(CLIENT_TO_SERVER_PATHS.get(host.id())).orElse(List.of());
+    public Set<MyPath> getPathsToServer(FLHost host) {
+        Set<MyPath> paths = Optional.ofNullable(CLIENT_TO_SERVER_PATHS.get(host.id())).orElse(Set.of());
         Util.log("general", String.format("%s CLIENT_TO_SERVER_PATHS paths found for client %s", paths.size(), host.getFlClientCID()));
         return paths;
     }
 
-    public List<MyPath> getPathsToClient(FLHost host) {
-        List<MyPath> paths = Optional.ofNullable(SERVER_TO_CLIENT_PATHS.get(host.id())).orElse(List.of());
+    public Set<MyPath> getPathsToClient(FLHost host) {
+        Set<MyPath> paths = Optional.ofNullable(SERVER_TO_CLIENT_PATHS.get(host.id())).orElse(Set.of());
         Util.log("general", String.format("%s SERVER_TO_CLIENT_PATHS paths found for client %s", paths.size(), host.getFlClientCID()));
         return paths;
     }
 
     public void setPathsToServer(HostId hostId) {
-        CLIENT_TO_SERVER_PATHS.put(hostId, new LinkedList<>());
-        Services.pathService.getKShortestPaths(hostId, HostId.hostId(Util.FL_SERVER_MAC))
+        Set<MyPath> paths = Services.pathService.getKShortestPaths(hostId, HostId.hostId(Util.FL_SERVER_MAC))
                 .limit(10).map(MyPath::new)
-                .forEach(path -> CLIENT_TO_SERVER_PATHS.get(hostId).add(path));
+                .collect(Collectors.toSet());
+        CLIENT_TO_SERVER_PATHS.put(hostId, paths);
     }
 
     public void setPathsToClient(HostId hostId) {
-        SERVER_TO_CLIENT_PATHS.put(hostId, new LinkedList<>());
-        Services.pathService.getKShortestPaths(HostId.hostId(Util.FL_SERVER_MAC), hostId)
+        Set<MyPath> paths = Services.pathService.getKShortestPaths(HostId.hostId(Util.FL_SERVER_MAC), hostId)
                 .limit(10).map(MyPath::new)
-                .forEach(path -> SERVER_TO_CLIENT_PATHS.get(hostId).add(path));
+                .collect(Collectors.toSet());
+        SERVER_TO_CLIENT_PATHS.put(hostId, paths);
+    }
+
+    public MyPath getPathFromString(FLHost host, String path, String direction){
+        if (direction.equals("S2C")){
+            return getPathsToClient(host).stream().filter(p -> p.format().equals(path)).findFirst().orElse(null);
+        }
+        else if (direction.equals("C2S")){
+            return getPathsToServer(host).stream().filter(p -> p.format().equals(path)).findFirst().orElse(null);
+        }
+        return null;
+    }
+
+    void printAll() {
+        Util.log("paths", "***************Server to Clients Paths***************");
+        for (FLHost host : ClientInformationDatabase.INSTANCE.getFLHosts()) {
+            StringBuilder stringBuilder = new StringBuilder(String.format("***** Paths for Client %s ****\n", host.getFlClientCID()));
+            getPathsToClient(host).forEach(myPath -> stringBuilder.append(Util.pathFormat(myPath)).append("\n"));
+            Util.log("paths", stringBuilder.toString());
+        }
+        Util.log("paths", "***************Client to Server Paths***************");
+        for (FLHost host : ClientInformationDatabase.INSTANCE.getFLHosts()) {
+            StringBuilder stringBuilder = new StringBuilder(String.format("***** Paths for Client %s ****\n", host.getFlClientCID()));
+            getPathsToServer(host).forEach(myPath -> stringBuilder.append(Util.pathFormat(myPath)).append("\n"));
+            Util.log("paths", stringBuilder.toString());
+        }
     }
 
     public void updateBottleneckPath() {

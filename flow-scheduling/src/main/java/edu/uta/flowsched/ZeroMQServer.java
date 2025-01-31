@@ -7,11 +7,9 @@ import org.onlab.packet.MacAddress;
 import org.onosproject.net.HostId;
 import org.zeromq.ZMQ;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 public class ZeroMQServer {
 
@@ -19,7 +17,11 @@ public class ZeroMQServer {
 
     private static final ExecutorService executorService = Executors.newCachedThreadPool();
     private static final ClientInformationDatabase clientInformationDatabase = ClientInformationDatabase.INSTANCE;
-    private static int ROUND = 1;
+    private static final PathInformationDatabase pathInformationDatabase = PathInformationDatabase.INSTANCE;
+
+    private static int TOTAL_CLIENTS = 10;
+    private static int clientMessages = 0;
+
     ZMQ.Socket socket;
     ZMQ.Context context;
 
@@ -53,13 +55,18 @@ public class ZeroMQServer {
                 JSONObject clientInfo = (JSONObject) jsonMessage;
                 updateDirectory(clientInfo);
             } else if (messageType == MessageType.SERVER_TO_CLIENTS) {
-                Util.log("general", String.format("************ Starting Round: %s ************", ROUND++));
-                Util.log("flow_debug", String.format("************ Starting Round: %s ************", ROUND));
                 JSONArray clients = (JSONArray) jsonMessage;
                 handleServerToClientsPaths(clients);
             } else if (messageType == MessageType.CLIENT_TO_SERVER) {
+                if (clientMessages == 0){
+                    GreedyFlowScheduler.C2S_INSTANCE.startScheduling();
+                }
+
                 String clientCID = jsonObject.getString("sender_id");
                 handleClientToServerPath(clientCID, clientTimeMS);
+                if (++clientMessages == TOTAL_CLIENTS) {
+                    clientMessages = 0;
+                }
             }
         } catch (Exception e) {
             Util.log("general", String.format("Error processing message: %s", e.getMessage()));
@@ -82,8 +89,7 @@ public class ZeroMQServer {
 
     private void handleClientToServerPath(String clientID, long time) {
         FLHost host = clientInformationDatabase.getHostByFLCID(clientID);
-
-        SetupPath.clientToServer(host);
+        GreedyFlowScheduler.C2S_INSTANCE.addClient(host, pathInformationDatabase.getPathsToServer(host));
     }
 
     private void handleServerToClientsPaths(JSONArray clients) throws JSONException {
@@ -94,10 +100,37 @@ public class ZeroMQServer {
         List<FLHost> hosts = clientInformationDatabase.getHostsByFLIDs(hashSet);
         StringBuilder sb = new StringBuilder();
         hosts.forEach(host -> sb.append(host.getFlClientCID()).append(","));
-        Util.log("general", String.format("** Server to Client Handing For: %s **", sb));
-        Map<FLHost, List<MyPath>> paths = new HashMap<>(hashSet.size());
-        hosts.forEach(host -> paths.put(host, PathInformationDatabase.INSTANCE.getPathsToClient(host)));
-        GreedyFlowScheduler.INSTANCE.callS2C(paths);
+        Util.log("general,greedy,debug_paths", String.format("** Server to Client Handing For: %s **", sb));
+        hosts = sortBasedOnMaxRate(hosts);
+        for (FLHost host : hosts) {
+            GreedyFlowScheduler.S2C_INSTANCE.addClient(host, pathInformationDatabase.getPathsToClient(host));
+        }
+        GreedyFlowScheduler.S2C_INSTANCE.startScheduling();
+    }
+
+    private List<FLHost> sortHostsBasedOnSwitchDegree(List<FLHost> hosts) {
+        return hosts.stream().sorted(Comparator.comparing(flHost -> Services.linkService.
+                getDeviceEgressLinks(flHost.location().deviceId()).size())).collect(Collectors.toList());
+    }
+
+    private List<FLHost> sortBasedOnMaxRate(List<FLHost> hosts){
+        Map<FLHost, Double> rates = new HashMap<>();
+        for (FLHost host : hosts) {
+            Set<MyPath> paths = PathInformationDatabase.INSTANCE.getPathsToClient(host);
+            double score = paths.stream()
+                    .mapToDouble(path ->path.getBottleneckFreeCap()/1e6)
+                    .max()
+                    .orElse(0);
+            rates.put(host, score);
+        }
+        StringBuilder debug = new StringBuilder("\t******** Sorted Clients ********\n");
+        List<FLHost> ordered = rates.entrySet().stream().sorted(Collections.reverseOrder(Map.Entry.comparingByValue()))
+                .peek(entry-> debug.append(String.format("\t\tHost: %s Score:%s\n", entry.getKey().getFlClientCID(), entry.getValue())))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        Util.log("greedy", debug.toString());
+        return ordered;
+
     }
 
 
