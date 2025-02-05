@@ -19,7 +19,7 @@ class CentralisedEvaluator:
         self.model = mobilenet_v3_large(weights=None, num_classes=10)
         self.test_data = "server_val_data"
         self.dataset = dataset
-        self.val_dataloader = DataLoader(self.get_dataset(), batch_size=64)
+        self.val_dataloader = DataLoader(self.get_dataset(), batch_size=128)
 
     def set_parameters(self, params):
         params_dict = zip(self.model.state_dict().keys(), params)

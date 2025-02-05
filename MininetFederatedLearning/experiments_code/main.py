@@ -8,6 +8,8 @@ from mininet.log import setLogLevel, info
 from mininet.node import OVSSwitch, RemoteController
 from mininet.link import TCLink
 
+from topohub_bg_gen import BGTrafficGenerator
+from topohub_topology import MyTopo2
 from topology import MyTopo
 from plotter import MininetPlotter
 from run_and_monitor_exp import ExperimentRunner
@@ -26,7 +28,7 @@ class MyMininet(Containernet):
         return fl_server, fl_clients
 
     def get_bg_hosts(self):
-        bg_clients = [host for host in self.hosts if "bgclient" in host.name]
+        bg_clients = {host.name:host for host in self.hosts if "bgclient" in host.name}
         return bg_clients
 
     """
@@ -56,7 +58,7 @@ class MyMininet(Containernet):
         intf_list = [intf for sw in self.switches for intf in sw.intfs.values() if re.match(".*-eth.*", intf.name)]
         for intf in intf_list:
             max_rate = 1_000_000_000 if intf.name.startswith("cs") else 100_000_000
-            min_rate = max_rate - 10_000_000 # rate - 10mbps
+            min_rate = max_rate//2 #- 100_000_000 # rate - 10mbps
             os.system(cmd.format(intf=intf.name, max=max_rate, min=min_rate))
 
     @staticmethod
@@ -84,24 +86,27 @@ class MyMininet(Containernet):
 
 def start():
     controller = RemoteController('c0', ip='11.66.33.46', port=6653)
-    topo_creator = MyTopo(fl_clients=10, bg_clients=20, number_of_levels=3, max_fl_clients_per_edge=1,
-                          min_switches_per_level=3, max_switches_per_level=6,
-                          start_level_for_aggregation=0, no_core_switches=4)
-    net1 = MyMininet(topo=topo_creator, switch=OVSSwitch, link=TCLink, controller=controller, qos=True)
+    topo_creator = MyTopo2(fl_clients_number=10, topo_size=15, variation=9)
+    net1 = MyMininet(topo=topo_creator, switch=OVSSwitch, link=TCLink, controller=controller, qos=False)
 
     (fl_server, fl_clients), bg_clients = net1.get_fl_hosts(), net1.get_bg_hosts()
 
-    exp_runner1 = ExperimentRunner(f"[withQoS]_flowsched_{time.strftime('%m%d_%H%M%S')}", fl_server=fl_server,
-                                   fl_clients=fl_clients, bg_clients=bg_clients, rounds=5, batch_size=32, zmq=True)
+    exp_name = f"[withBW]_flowsched_agfc_50rounds_{time.strftime('%m%d_%H%M%S')}"
+    bg_gen = BGTrafficGenerator(bg_clients, topo_creator.nodes_data, topo_creator.links_data, exp_name)
+    exp_runner1 = ExperimentRunner(exp_name, fl_server=fl_server,fl_clients=fl_clients, bg_clients=bg_clients,
+                                   rounds=50, batch_size=32, zmq=True)
     with net1:
         CLI(net1)
         with exp_runner1:
-            with open(f"../logs/{exp_runner1.exp_name}/exp_info.txt", "w") as exp_info:
+            with open(f"logs/{exp_runner1.exp_name}/exp_info.txt", "w") as exp_info:
                 exp_info.write(json.dumps(str(net1.topo)))
                 exp_info.write("\n")
                 exp_info.write(json.dumps(str(exp_runner1)))
-            info(f'*** Starting {exp_runner1.exp_name}\n')
+            bg_gen.start()
+            info(f'*** Starting {exp_runner1.exp_name} - Turn FlowSched Now\n')
+            time.sleep(5)
             exp_runner1.start_experiment()
+            bg_gen.stop()
         CLI(net1)
 
 

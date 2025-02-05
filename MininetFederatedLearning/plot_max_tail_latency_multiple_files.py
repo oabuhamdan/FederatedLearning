@@ -1,7 +1,8 @@
+from collections import defaultdict
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-
 
 # Function to plot round time as a bar chart for multiple files
 def plot_round_time(files, round_range=(1, 50)):
@@ -21,23 +22,24 @@ def plot_round_time(files, round_range=(1, 50)):
     # Loop through each file and plot its data
     for i, file_path in enumerate(files):
         # Read the CSV file
-        data = pd.read_csv(f"logs/50rounds/{file_path}/fl_task_overall_times.csv")
+        data = pd.read_csv(f"logs/50rounds/{file_path}/fl_task_client_times.csv")
 
         # Extract current_round and round_time columns
         rounds = data['current_round']
         # Filter the data based on the round range
         filtered_data = data[(rounds >= start_round) & (rounds <= end_round)]
+        max_server_to_client_per_round = filtered_data.groupby('current_round')['server_to_client_time'].max()
 
         # Set the position of the bars for this file
         positions = x_positions + i * bar_width
 
         # Plot a bar chart for the round times
-        plt.bar(positions, filtered_data['round_time'], bar_width, label=file_path)
+        plt.bar(positions, max_server_to_client_per_round, bar_width, label=file_path)
 
     # Add labels and title
     plt.xlabel('Round')
-    plt.ylabel('Round Time (seconds)')
-    plt.title(f'Comparison of Round Times Across Files (Rounds {start_round} to {end_round})')
+    plt.ylabel('Tail Latency (seconds)')
+    plt.title(f'Comparison of Tail Latency per Round (Rounds {start_round} to {end_round})')
 
     # Set x-ticks to be the center of the grouped bars
     plt.xticks(x_positions + bar_width * (num_files - 1) / 2, x_positions)

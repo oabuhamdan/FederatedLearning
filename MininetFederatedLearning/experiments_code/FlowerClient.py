@@ -40,7 +40,7 @@ def train(net, trainloader, optimizer, epochs, device):
             if i % 100 == 0:
                 logging.info(f"Step {i} Epoch {epoch}")
             # update the controller after 80% of the steps are done
-            if args.zmq and epoch == (epochs - 1) and i == round(total_steps * 0.8):
+            if args.zmq and epoch == (epochs - 1) and i == round(total_steps * 0.85):
                 send_data_to_server("client_to_server_path")
 
 

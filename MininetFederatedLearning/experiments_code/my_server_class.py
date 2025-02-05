@@ -98,7 +98,8 @@ def fit_clients(
 class MyServer(Server):
     def __init__(self, *, client_manager, strategy, zmq, my_server_address, onos_server_address, log_path):
         super().__init__(client_manager=client_manager, strategy=strategy)
-        self.server_log = csv.writer(open(f'{log_path}/fl_task_times.csv', 'w'), dialect='unix')
+        self.client_wise_log = csv.writer(open(f'{log_path}/fl_task_client_times.csv', 'w'), dialect='unix')
+        self.overall_log = csv.writer(open(f'{log_path}/fl_task_overall_times.csv', 'w'), dialect='unix')
         self.zmq = zmq
         if self.zmq:
             self.zmq_handler = ZMQHandler(my_server_address, onos_server_address)
@@ -129,8 +130,9 @@ class MyServer(Server):
 
         # Collect clients_info
         if self.zmq:
-            round_clients = [client_proxy.cid for client_proxy, _ in client_instructions]
+            round_clients = sorted([client_proxy.cid for client_proxy, _ in client_instructions])
             self.zmq_handler.send_data_to_server(ZMQHandler.MessageType.SERVER_TO_CLIENTS, round_clients)
+            time.sleep(0.1)
 
         results, failures = fit_clients(
             client_instructions=client_instructions,
@@ -177,8 +179,9 @@ class MyServer(Server):
 
         # Run federated learning for num_rounds
         start_time = timeit.default_timer()
-        self.server_log.writerow(['current_round', 'client_id', 'round_time', 'server_to_client_time',
+        self.client_wise_log.writerow(['current_round', 'client_id', 'round_time', 'server_to_client_time',
                                   'computing_time', 'client_to_server_time'])
+        self.overall_log.writerow(['current_round', 'loss_cen', 'accuracy_cen', 'round_time'])
         for current_round in range(1, num_rounds + 1):
             round_start_time = timeit.default_timer()
             log(INFO, "")
@@ -187,6 +190,7 @@ class MyServer(Server):
                 server_round=current_round,
                 timeout=timeout,
             )
+            round_end_time = timeit.default_timer()
             if res_fit is not None:
                 parameters_prime, fit_metrics, (results, failures) = res_fit  # fit_metrics_aggregated
                 if parameters_prime:
@@ -194,20 +198,22 @@ class MyServer(Server):
                 history.add_metrics_distributed_fit(
                     server_round=current_round, metrics=fit_metrics
                 )
-                self.log_csv_metrics(current_round, round_start_time, results)
+                self.log_csv_metrics(current_round, results)
 
             # Evaluate model using strategy implementation
             res_cen = self.strategy.evaluate(current_round, parameters=self.parameters)
             if res_cen is not None:
                 loss_cen, metrics_cen = res_cen
+                round_time = round_end_time - round_start_time
                 log(
                     INFO,
                     "fit progress: (%s, %s, %s, %s)",
                     current_round,
                     loss_cen,
                     metrics_cen,
-                    timeit.default_timer() - start_time,
+                    round_time,
                 )
+                self.overall_log.writerow([current_round, loss_cen, metrics_cen['accuracy'], round_time])
                 history.add_loss_centralized(server_round=current_round, loss=loss_cen)
                 history.add_metrics_centralized(
                     server_round=current_round, metrics=metrics_cen
@@ -230,7 +236,7 @@ class MyServer(Server):
         elapsed = end_time - start_time
         return history, elapsed
 
-    def log_csv_metrics(self, current_round, round_start_time, results):
+    def log_csv_metrics(self, current_round, results):
         for result in results:
             metrics = result[1].metrics
             client_id = metrics['client']
@@ -238,8 +244,8 @@ class MyServer(Server):
             computing_time = metrics["computing_finish_time"] - metrics["computing_start_time"]
             round_time = metrics["client_round_finish_time"] - metrics["client_round_start_time"]
             client_to_server_time = metrics["client_round_finish_time"] - metrics["computing_finish_time"]
-            self.server_log.writerow([current_round, client_id, round_time, server_to_client_time,
-                                      computing_time, client_to_server_time])
+            self.client_wise_log.writerow([current_round, client_id, round_time, server_to_client_time,
+                                           computing_time, client_to_server_time])
 
 
 class MyClient:

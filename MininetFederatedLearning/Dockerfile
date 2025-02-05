@@ -35,6 +35,7 @@ COPY experiments_code/FlowerClient.py .
 COPY experiments_code/FlowerServer.py .
 COPY experiments_code/network_stats.sh .
 COPY experiments_code/my_server_class.py .
+COPY experiments_code/start_iperf.sh .
 
 #COPY venv/lib/python3.10/site-packages/flwr/server/server.py venv/lib/python3.12/site-packages/flwr/server/server.py
 COPY venv/lib/python3.10/site-packages/flwr/server/app.py venv/lib/python3.12/site-packages/flwr/server/app.py

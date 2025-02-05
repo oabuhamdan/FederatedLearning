@@ -1,6 +1,6 @@
 from flwr_datasets import FederatedDataset
 
-NUM_CLIENTS = 10
+NUM_CLIENTS = 30
 DATASET = 'cifar10'
 
 fds = FederatedDataset(dataset=DATASET, partitioners={"train": NUM_CLIENTS, "test": 1})

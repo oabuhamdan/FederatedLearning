@@ -1,68 +1,55 @@
 #!/bin/bash
 
-# Define the network interface, interval (in seconds), and output file
-INTERFACE=$1       # Change this to your network interface
-INTERVAL=$2             # Time interval in seconds
-OUTPUT_FILE=$3
+# Read RX and TX bytes for given interface
+get_interface_stats() {
+    local interface="$1"
+    local stats=$(grep "^[[:space:]]*$interface:" /proc/net/dev | tr -s ' ' | cut -d' ' -f 2,10)
+    echo "$stats"
+}
+interface="$1"
+interval="$2"
+output_file="$3"
 
-## TX Stats
-prev_tx_bytes=$(cat /sys/class/net/$INTERFACE/statistics/tx_bytes)
-prev_tx_errors=$(cat /sys/class/net/$INTERFACE/statistics/tx_errors)
-prev_tx_dropped=$(cat /sys/class/net/$INTERFACE/statistics/tx_dropped)
+# Initialize output file with headers
+echo "elapsed_seconds,rx_bytes,tx_bytes,rx_rate_bps,tx_rate_bps" > "$output_file"
 
-# RX Stats
-prev_rx_bytes=$(cat /sys/class/net/$INTERFACE/statistics/rx_bytes)
-prev_rx_errors=$(cat /sys/class/net/$INTERFACE/statistics/rx_errors)
-prev_rx_dropped=$(cat /sys/class/net/$INTERFACE/statistics/rx_dropped)
-
-start_time=$(date +%s)
-
-# Write the CSV header
-echo "Time,Elapsed_Seconds,TX_Bytes,TX_Errors,TX_Dropped,RX_Bytes,RX_Errors,RX_Dropped" > $OUTPUT_FILE
+# Get initial statistics and time
+start_time=$(date +%s%N)
+prev_time=$start_time
+prev_stats=$(get_interface_stats "$interface")
+prev_rx=$(echo "$prev_stats" | cut -d' ' -f1)
+prev_tx=$(echo "$prev_stats" | cut -d' ' -f2)
 
 while true; do
-    # Get the current time in seconds
-    current_time=$(date +%s)
+    sleep "$interval"
 
-    # Calculate the elapsed time since the script started
-    elapsed_time=$((current_time - start_time))
+    # Get current time (in nanoseconds) and statistics
+    current_time=$(date +%s%N)
+    current_stats=$(get_interface_stats "$interface")
+    curr_rx=$(echo "$current_stats" | cut -d' ' -f1)
+    curr_tx=$(echo "$current_stats" | cut -d' ' -f2)
 
-    # Read current TX and RX bytes
-    tx_bytes=$(cat /sys/class/net/$INTERFACE/statistics/tx_bytes)
-    tx_errors=$(cat /sys/class/net/$INTERFACE/statistics/tx_errors)
-    tx_dropped=$(cat /sys/class/net/$INTERFACE/statistics/tx_dropped)
+    # Calculate actual time difference in seconds (converting from nanoseconds)
+    time_diff=$(( (current_time - prev_time) / 1000000000 ))
 
-    rx_bytes=$(cat /sys/class/net/$INTERFACE/statistics/rx_bytes)
-    rx_errors=$(cat /sys/class/net/$INTERFACE/statistics/rx_errors)
-    rx_dropped=$(cat /sys/class/net/$INTERFACE/statistics/rx_dropped)
+    # Prevent division by zero
+    if [ "$time_diff" -gt 0 ]; then
+        # Calculate elapsed time and rates using integer arithmetic
+        elapsed=$(( (current_time - start_time) / 1000000000 ))
+        rx_diff=$((curr_rx - prev_rx))
+        tx_diff=$((curr_tx - prev_tx))
+        # Convert to bits per second using actual time difference
+        rx_rate=$(((rx_diff * 8) / time_diff))
+        tx_rate=$(((tx_diff * 8) / time_diff))
 
-    # Calculate the difference (delta) from the previous read
-    delta_tx_bytes=$((tx_bytes - prev_tx_bytes))
-    delta_tx_errors=$((tx_errors - prev_tx_errors))
-    delta_tx_dropped=$((tx_dropped - prev_tx_dropped))
+        # Format timestamp
 
-    delta_rx_bytes=$((rx_bytes - prev_rx_bytes))
-    delta_rx_errors=$((rx_errors - prev_rx_errors))
-    delta_rx_dropped=$((rx_dropped - prev_rx_dropped))
+        # Log to file
+        echo "$elapsed,$curr_rx,$curr_tx,$rx_rate,$tx_rate" >> "$output_file"
 
-    # Write the data to the CSV file
-    output="$(date +%s),"
-    output+="$elapsed_time,"
-    output+="$delta_tx_bytes,$delta_tx_errors,$delta_tx_dropped,"
-    output+="$delta_rx_bytes,$delta_rx_errors,$delta_rx_dropped"
-
-    echo "$output" >> $OUTPUT_FILE
-    # Update previous values
-
-    prev_tx_bytes=$tx_bytes
-    prev_tx_errors=$tx_errors
-    prev_tx_dropped=$tx_dropped
-
-    # RX Stats
-    prev_rx_bytes=$rx_bytes
-    prev_rx_errors=$rx_errors
-    prev_rx_dropped=$rx_dropped
-
-    # Wait for the specified interval before the next read
-    sleep $INTERVAL
+        # Update previous values
+        prev_rx=$curr_rx
+        prev_tx=$curr_tx
+        prev_time=$current_time
+    fi
 done

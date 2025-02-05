@@ -6,7 +6,8 @@ import yaml
 from mininet.node import Docker
 from mininet.topo import Topo
 
-link_config = {}#{"bw": 100, "delay": "1ms", "max_queue_size": 5000, "use_tbf": False, "latency_ms": 400}
+link_config = {"bw": 100, "delay": "2ms", "max_queue_size": 5000}
+core_link_config = {"bw": 1000, "delay": "0.5ms", "max_queue_size": 1000}
 
 
 class MyTopo(Topo):
@@ -34,11 +35,7 @@ class MyTopo(Topo):
 
         # Switch config default
         self.switch_config = kwargs.get('switch_config', dict(protocols="OpenFlow13"))
-        self.containernet_kwargs = {
-            "volumes": [
-                "/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/logs:/app/logs",
-                "/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/data:/app/data",
-            ],
+        self.containernet_kwargs = {"volumes": ["logs/:/app/logs", "data/:/app/data"],
             "dimage": "fl_mininet_image:latest",
             "cls": Docker
         }
@@ -70,7 +67,7 @@ class MyTopo(Topo):
 
         # fl_server
         fl_server = self.addHost('flserver', ip=f"10.0.0.100", mac="00:00:00:00:00:AA", **self.containernet_kwargs)
-        self.addLink(fl_server, core_switches[0])
+        self.addLink(fl_server, core_switches[0], **core_link_config)
 
         # Intermediate levels
         intermediate_levels = self.create_middle_switches(core_switches[1:])
@@ -152,5 +149,5 @@ class MyTopo(Topo):
         # self.link_configs[self.links_by_level[0]]  # starting from one to skip core connection
         for i in range(len(core_switches) - 1):
             for j in range(i + 1, len(core_switches)):
-                self.addLink(core_switches[i], core_switches[j], **link_config)
+                self.addLink(core_switches[i], core_switches[j], **core_link_config)
         return core_switches
