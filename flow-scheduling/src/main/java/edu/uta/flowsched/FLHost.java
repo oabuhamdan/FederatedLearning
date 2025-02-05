@@ -89,8 +89,8 @@ class FLHost extends DefaultHost {
             this.lastRXRate = new LinkedList<>();
             this.lastPositiveTXRate = new LinkedList<>();
             this.lastPositiveRXRate = new LinkedList<>();
-            this.roundSentData = new long[10];
-            this.roundReceivedData = new long[10];
+            this.roundSentData = new long[55];
+            this.roundReceivedData = new long[55];
         }
 
         public long getLastPositiveTXRate() {

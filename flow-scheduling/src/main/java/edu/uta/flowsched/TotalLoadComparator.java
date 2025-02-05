@@ -79,7 +79,7 @@ public class TotalLoadComparator implements Comparator<MyPath> {
         double normalizedHopCount = (maxHopCount - hopCount) / (maxHopCount - minHopCount);
         double normalizedActiveFlows = (maxActiveFlows - activeFlows) / (maxActiveFlows - minActiveFlows);
 
-        double score = weightFairShare * normalizedFairShare + weightFreeCap * normalizedFreeCap + weightActiveFlows * activeFlows + weightHopCount * normalizedHopCount;
+        double score = weightFairShare * normalizedFairShare + weightFreeCap * normalizedFreeCap + weightActiveFlows * normalizedActiveFlows + weightHopCount * normalizedHopCount;
         double[] values = {score, fairShare, freeCapacity, activeFlows, hopCount, normalizedFairShare, normalizedFreeCap, normalizedActiveFlows, normalizedHopCount};
         return values;
     }

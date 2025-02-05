@@ -117,18 +117,19 @@ public class ZeroMQServer {
         Map<FLHost, Double> rates = new HashMap<>();
         for (FLHost host : hosts) {
             Set<MyPath> paths = PathInformationDatabase.INSTANCE.getPathsToClient(host);
+//            TotalLoadComparator comparator = new TotalLoadComparator(paths, 0.6, 0.2, 0.1, 0.1);
             double score = paths.stream()
-                    .mapToDouble(path ->path.getBottleneckFreeCap()/1e6)
+                    .mapToDouble(path ->path.getBottleneckFreeCap() / 1e6)
                     .max()
                     .orElse(0);
             rates.put(host, score);
         }
-        StringBuilder debug = new StringBuilder("\t******** Sorted Clients ********\n");
+//        StringBuilder debug = new StringBuilder("\t******** Sorted Clients ********\n");
         List<FLHost> ordered = rates.entrySet().stream().sorted(Collections.reverseOrder(Map.Entry.comparingByValue()))
-                .peek(entry-> debug.append(String.format("\t\tHost: %s Score:%s\n", entry.getKey().getFlClientCID(), entry.getValue())))
+//                .peek(entry-> debug.append(String.format("\t\tHost: %s Score:%s\n", entry.getKey().getFlClientCID(), entry.getValue())))
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
-        Util.log("greedy", debug.toString());
+//        Util.log("greedy", debug.toString());
         return ordered;
 
     }

@@ -7,8 +7,10 @@ import org.onosproject.cfg.ConfigProperty;
 import org.onosproject.net.*;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.*;
 
 
 public class Util {
@@ -16,9 +18,8 @@ public class Util {
     static final long MODEL_SIZE = 20 * 1_000_000 * 8; // 20 Mega-bit
     static final MacAddress FL_SERVER_MAC = MacAddress.valueOf("00:00:00:00:00:AA");
     static final Host SERVER_HOST = Services.hostService.getHost(HostId.hostId(FL_SERVER_MAC));
-    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(ClientInformationDatabase.class);
-
-    final static ConcurrentHashMap<String, Logger> LOGGERS = new ConcurrentHashMap<>();
+    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Util.class);
+    final static ConcurrentHashMap<String, BufferedWriter> LOGGERS = new ConcurrentHashMap<>();
 
 
     private static int getPollFreq() {
@@ -72,8 +73,7 @@ public class Util {
                     stringBuilder.append("FLServer");
                 else
                     stringBuilder.append("FL#").append(ClientInformationDatabase.INSTANCE.getHostByHostID((HostId) id).get().getFlClientCID());
-            }
-            else {
+            } else {
                 stringBuilder.append(id.toString().substring(15));
             }
             stringBuilder.append(" -> ");
@@ -88,24 +88,43 @@ public class Util {
     static void log(String loggerNames, String message) {
         String[] loggers = loggerNames.split(",");
         for (String loggerName : loggers) {
-            if (!LOGGERS.containsKey(loggerName)) {
-                try {
-                    Logger logger = Logger.getLogger(loggerName);
-                    LOGGERS.put(loggerName, logger);
-                    FileHandler fh = new FileHandler(String.format("/home/osama/flow_sched_logs/%s.log", loggerName));
-                    logger.setUseParentHandlers(false);
-                    logger.addHandler(fh);
-                    fh.setFormatter(new Formatter() {
-                        @Override
-                        public String format(LogRecord logRecord) {
-                            return logRecord.getMessage() + "\n";
-                        }
-                    });
-                } catch (Exception e) {
-                    LOGGER.error(e.getMessage());
+            try {
+                BufferedWriter logger = LOGGERS.computeIfAbsent(loggerName, name -> {
+                    try {
+                        return new BufferedWriter(new FileWriter(String.format("/home/osama/flow_sched_logs/%s.log", name)));
+                    } catch (IOException e) {
+                        LOGGER.error("Error while creating file writer for logger: " + name, e);
+                        return null;
+                    }
+                });
+
+                if (logger == null) {
+                    continue; // If we failed to create the logger, skip this logger
                 }
+                logger.write(message + "\n");
+            } catch (Exception e) {
+                LOGGER.error("Error While Logging: " + loggerName + " => " + e.getMessage(), e);
             }
-            LOGGERS.get(loggerName).info(message);
         }
+    }
+
+    static void flushWriters() {
+        LOGGERS.forEach((s, bufferedWriter) -> {
+            try {
+                bufferedWriter.flush();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    static void closeWriters() {
+        LOGGERS.forEach((s, bufferedWriter) -> {
+            try {
+                bufferedWriter.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 }

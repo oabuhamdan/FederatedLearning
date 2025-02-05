@@ -59,7 +59,7 @@ public class LinkInformationDatabase {
             LINK_INFORMATION_MAP.put(link, new MyLink(link));
         }
 
-        executor.scheduleAtFixedRate(this::linkInfo, Util.POLL_FREQ, Util.POLL_FREQ, TimeUnit.SECONDS);
+//        executor.scheduleAtFixedRate(this::linkInfo, Util.POLL_FREQ, Util.POLL_FREQ, TimeUnit.SECONDS);
     }
 
     protected void deactivate() {

@@ -69,7 +69,7 @@ public class GreedyFlowScheduler {
         if (!clientPaths.containsKey(client)) {
             clientPaths.put(client, paths);
         }
-        Util.log("greedy", String.format("Added Client %s to Queue ...", client.getFlClientCID()));
+//        Util.log("greedy", String.format("Added Client %s to Queue ...", client.getFlClientCID()));
         synchronized (this) {
             notify(); // Notify the scheduler in case it's waiting
         }
@@ -79,7 +79,7 @@ public class GreedyFlowScheduler {
         FLHost client;
         while ((client = clientQueue.poll()) != null) {
             phase1Queue.add(client);
-            Util.log("greedy", String.format("Added Client %s to Active in %s ...", client.getFlClientCID(), direction));
+//            Util.log("greedy", String.format("Added Client %s to Active in %s ...", client.getFlClientCID(), direction));
         }
     }
 
@@ -99,12 +99,12 @@ public class GreedyFlowScheduler {
         while (completedClients.size() < TOTAL_CLIENTS) {
             try {
                 getClientsFromQueue(needPhase1Processing);
-                StringBuilder internalLogger = new StringBuilder();
+                StringBuilder phase1Logger = new StringBuilder("***Processing in Phase1 ****\n");
 
                 FLHost client;
                 while ((client = needPhase1Processing.poll()) != null) {
                     if (!clientAlmostDone(client, dataRemaining, completionTimes))
-                        processClient(client, completionTimes, dataRemaining, assumedRates, internalLogger);
+                        processClient(client, completionTimes, dataRemaining, assumedRates, phase1Logger);
 
                     needPhase2Processing.add(client);
                 }
@@ -113,7 +113,7 @@ public class GreedyFlowScheduler {
                     phase2(completionTimes, dataRemaining, assumedRates, needPhase1Processing, needPhase2Processing, completedClients);
                 }
 
-                Util.log("greedy", internalLogger.toString());
+                Util.log("greedy", phase1Logger.toString());
                 PathRulesInstaller.INSTANCE.increasePriority();
             } catch (Exception e) {
                 Util.log("greedy", "Error in scheduler: " + e.getMessage() + "...." + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray()));
@@ -123,6 +123,7 @@ public class GreedyFlowScheduler {
         needPhase1Processing.clear();
         needPhase2Processing.clear();
         Util.log("greedy", String.format("Completed Round %s for %s", round++, direction));
+        Util.flushWriters();
     }
 
 
@@ -139,12 +140,12 @@ public class GreedyFlowScheduler {
                 clientLogger.append(String.format("\t\tCurrent Path: %s\n", Util.pathFormat(currentPath)));
                 affectedClients.addAll(currentPath.removeFlow(client, this.direction));
             }
-            int affectedByRemove = affectedClients.size();
+//            int affectedByRemove = affectedClients.size();
 
             MyPath bestPath = bestPaths.get(0).path;
             updateClientPath(client, bestPath, affectedClients, clientLogger);
             updateTimeAndRate(client, affectedClients, completionTimes, dataRemaining, artAssignedRates);
-            logAffectedClients(affectedClients, artAssignedRates, affectedByRemove, clientLogger);
+//            logAffectedClients(affectedClients, artAssignedRates, affectedByRemove, clientLogger);
 
             PathRulesInstaller.INSTANCE.installPathRules(client, bestPath);
         }
@@ -155,15 +156,12 @@ public class GreedyFlowScheduler {
                         Map<FLHost, Long> artAssignedRates, ConcurrentLinkedQueue<FLHost> needPhase1Processing,
                         ConcurrentLinkedQueue<FLHost> needPhase2Processing, ConcurrentLinkedQueue<FLHost> completedClients) {
         if (future == null || future.isDone()) {
-            Util.log("greedy", String.format("******Schedule After %ss******", Util.POLL_FREQ));
             future = waitExecutor.schedule(() -> {
                 updateClientsStatus(needPhase2Processing, needPhase1Processing, completedClients, completionTimes, dataRemaining, artAssignedRates);
                 synchronized (this) {
                     notifyAll(); // Notify the scheduler in case it's waiting
                 }
             }, Util.POLL_FREQ, TimeUnit.SECONDS);
-        } else {
-            Util.log("greedy", "******Didn't start a new future because there is one running already******");
         }
     }
 
@@ -205,18 +203,22 @@ public class GreedyFlowScheduler {
     private List<PathScore> findBestPath(FLHost client) {
         Set<MyPath> paths = clientPaths.get(client);
 
-//        TotalLoadComparator comparator = new TotalLoadComparator(paths, 0.4, 0.2, 0.2, 0.2);
-        Function<MyPath, Number> pathScore = path -> path.getBottleneckFreeCap()/1e6;
+//        TotalLoadComparator comparator = new TotalLoadComparator(paths, 0.6, 0.2, 0.1, 0.1);
+        Function<MyPath, Number> pathScore = path -> path.getBottleneckFreeCap() / 1e6;
 
         List<PathScore> pathScores = paths.stream()
                 .map(path -> new PathScore(path, pathScore.apply(path)))
                 .sorted(Comparator.comparing(ps -> ((PathScore) ps).score.doubleValue()).reversed())
                 .collect(Collectors.toList());
 
-        StringBuilder builder = new StringBuilder(String.format("\tLog paths score for client %s direction %s\n", client.getFlClientCID(), this.direction));
-        pathScores.forEach(ps -> builder.append("\t\tScore: ").append(ps.score).append("Path: ").append(ps.path.format()).append("\n"));
-        Util.log("debug_paths", builder.toString());
+//        debugPaths(client, comparator, pathScores);
         return pathScores;
+    }
+
+    private void debugPaths(FLHost client, TotalLoadComparator comparator, List<PathScore> pathScores) {
+        StringBuilder builder = new StringBuilder(String.format("\tLog paths score for client %s direction %s\n", client.getFlClientCID(), this.direction));
+        pathScores.forEach(ps -> builder.append("\t\tScore: ").append(comparator.debugScore(ps.path)).append("Path: ").append(ps.path.format()).append("\n"));
+        Util.log("debug_paths", builder.toString());
     }
 
     private boolean shouldSwitchPath(FLHost client, List<PathScore> bestPaths, StringBuilder internalLogger) {
@@ -260,11 +262,11 @@ public class GreedyFlowScheduler {
                                      Map<FLHost, Integer> completionTimes,
                                      Map<FLHost, Long> dataRemaining,
                                      Map<FLHost, Long> artAssignedRates) {
-        StringBuilder internalLogger = new StringBuilder();
+        StringBuilder phase2Logger = new StringBuilder();
 
-        internalLogger.append("\tProcessing in Phase 2: ");
-        needPhase1Processing.forEach(h -> internalLogger.append(h.getFlClientCID()).append(","));
-        internalLogger.append("\n");
+        phase2Logger.append("\tPhase 2: ");
+        needPhase1Processing.forEach(h -> phase2Logger.append(h.getFlClientCID()).append(","));
+        phase2Logger.append("\n");
 
         try {
             FLHost client;
@@ -275,7 +277,12 @@ public class GreedyFlowScheduler {
 
                 if (remainingTime <= 0 || dataRemain <= 0) {
                     completedClients.add(client);
-                    client.getCurrentPath(this.direction).removeFlow(client, this.direction);
+                    MyPath path = client.getCurrentPath(this.direction);
+                    if (path != null) {
+                        path.removeFlow(client, this.direction);
+                    } else {
+                        phase2Logger.append(String.format("\t - !! Client %s has no %s Path !!", client.getFlClientCID(), this.direction));
+                    }
                     client.setCurrentPath(null, this.direction);
                     completionTimes.remove(client);
                     dataRemaining.remove(client);
@@ -284,12 +291,12 @@ public class GreedyFlowScheduler {
                     completionTimes.put(client, remainingTime);
                     needPhase1Processing.add(client);
                 }
-                internalLogger.append(String.format("\t - Client %s: Art Rate: %sMbps, Real Rate:%sMbps, Real Rem Time: %ss, Real Rem Data: %sMbits \n",
+                phase2Logger.append(String.format("\t - Client %s: Art Rate: %sMbps, Real Rate:%sMbps, Real Rem Time: %ss, Real Rem Data: %sMbits \n",
                         client.getFlClientCID(), bitToMbit(artAssignedRates.get(client)), bitToMbit(assignedRate), remainingTime, bitToMbit(dataRemain)));
             }
-            internalLogger.append(String.format("\t** Completed %s/%s Clients**\n", completedClients.size(), TOTAL_CLIENTS));
-            internalLogger.append("\t** Finishing Internal Round**\n");
-            Util.log("greedy", internalLogger.toString());
+            phase2Logger.append(String.format("\t** Completed %s/%s Clients**\n", completedClients.size(), TOTAL_CLIENTS));
+            phase2Logger.append("\t** Finishing Internal Round**\n");
+            Util.log("greedy", phase2Logger.toString());
         } catch (Exception e) {
             Util.log("greedy", e.getMessage() + "..." + Arrays.toString(e.getStackTrace()));
         }

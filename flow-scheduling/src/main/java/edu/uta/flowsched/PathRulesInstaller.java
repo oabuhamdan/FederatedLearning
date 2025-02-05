@@ -47,7 +47,7 @@ public class PathRulesInstaller {
             inPort = links.get(i).dst().port();
         }
         Services.flowRuleService.applyFlowRules(rules.toArray(new FlowRule[0]));
-        scheduledExecutorService.schedule(() -> debugRules(flHost, rules, path), 10, TimeUnit.SECONDS);
+//        scheduledExecutorService.schedule(() -> debugRules(flHost, rules, path), 10, TimeUnit.SECONDS);
     }
 
     private void debugRules(FLHost flHost, List<FlowRule> rules, Path path) {

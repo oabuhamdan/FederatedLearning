@@ -69,6 +69,7 @@ public class AppComponent {
         ZeroMQServer.INSTANCE.deactivate();
         ClientInformationDatabase.INSTANCE.deactivate();
         GreedyFlowScheduler.deactivate();
+        Util.closeWriters();
         log.info("Stopped");
     }
 }

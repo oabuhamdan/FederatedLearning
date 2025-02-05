@@ -110,12 +110,6 @@ public class ClientInformationDatabase {
 
 //                roundSentData.get(flHost).set(ZeroMQServer.getCurrentRound(), portStatistics.bytesSent() * 8);
 //                roundReceivedData.get(flHost).set(ZeroMQServer.getCurrentRound(), portStatistics.bytesSent() * 8);
-
-                String lastRXRates = flHost.networkStats.getLastRXRate().stream().map(x -> String.valueOf(bitToMbit(x))).collect(Collectors.joining(","));
-                String lastTXRates = flHost.networkStats.getLastTXRate().stream().map(x -> String.valueOf(bitToMbit(x))).collect(Collectors.joining(","));
-                Util.log("client_rates", String.format("Client%s: RX: %sMbps, TX: %sMbps, Pos RX: %sMbps, Pos TX:%sMbps",
-                        flHost.getFlClientCID(), lastRXRates, lastTXRates,
-                        bitToMbit(flHost.networkStats.getLastPositiveRXRate()), bitToMbit(flHost.networkStats.getLastPositiveTXRate())));
             });
         }
     }
