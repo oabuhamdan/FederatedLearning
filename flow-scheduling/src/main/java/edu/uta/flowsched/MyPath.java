@@ -14,7 +14,6 @@ import java.util.stream.Stream;
 public class MyPath extends DefaultPath {
     private static final ProviderId PID = new ProviderId("flowsched", "edu.uta.flowsched", true);
     private final Set<Link> linksWithoutEdge;
-    private MyLink bottleneckLink;
     private double delay;
     private long lastUpdated;
 
@@ -78,17 +77,16 @@ public class MyPath extends DefaultPath {
     }
 
     public double getCurrentActiveFlows() {
-        return getBottleneckLink().getActiveFlows();
+        return linksNoEdge().stream()
+                .mapToInt(link -> ((MyLink) link).getActiveFlows())
+                .max()
+                .orElse(0);
     }
 
     public MyLink getBottleneckLink() { // TODO: Remove
-        if (Util.ageInSeconds(lastUpdated) >= Util.POLL_FREQ) {
-            this.bottleneckLink = (MyLink) linksNoEdge().stream()
-                    .min(Comparator.comparing(link -> ((MyLink) link).getProjectedFairShare()))
-                    .orElse(linksNoEdge().iterator().next());
-            this.lastUpdated = System.currentTimeMillis();
-        }
-        return this.bottleneckLink;
+        return (MyLink) linksNoEdge().stream()
+                .min(Comparator.comparing(link -> ((MyLink) link).getProjectedFairShare()))
+                .orElse(linksNoEdge().iterator().next());
     }
 
     public String format() {

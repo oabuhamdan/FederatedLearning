@@ -74,10 +74,10 @@ public class TotalLoadComparator implements Comparator<MyPath> {
         double activeFlows = this.activeFlows.get(path);
         double freeCapacity = this.pathFreeCapacity.get(path);
 
-        double normalizedFreeCap = (freeCapacity - minFreeCap) / (maxFreeCap - minFreeCap);
-        double normalizedFairShare = (fairShare - minFairShare) / (maxFairShare - minFairShare);
-        double normalizedHopCount = (maxHopCount - hopCount) / (maxHopCount - minHopCount);
-        double normalizedActiveFlows = (maxActiveFlows - activeFlows) / (maxActiveFlows - minActiveFlows);
+        double normalizedFreeCap = (freeCapacity - minFreeCap) / Math.max(maxFreeCap - minFreeCap, 1);
+        double normalizedFairShare = (fairShare - minFairShare) / Math.max(maxFairShare - minFairShare, 1);
+        double normalizedHopCount = (maxHopCount - hopCount) / Math.max(maxHopCount - minHopCount, 1);
+        double normalizedActiveFlows = (maxActiveFlows - activeFlows) / Math.max(maxActiveFlows - minActiveFlows, 1);
 
         double score = weightFairShare * normalizedFairShare + weightFreeCap * normalizedFreeCap + weightActiveFlows * normalizedActiveFlows + weightHopCount * normalizedHopCount;
         double[] values = {score, fairShare, freeCapacity, activeFlows, hopCount, normalizedFairShare, normalizedFreeCap, normalizedActiveFlows, normalizedHopCount};

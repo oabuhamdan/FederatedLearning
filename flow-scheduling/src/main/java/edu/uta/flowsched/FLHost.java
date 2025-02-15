@@ -9,18 +9,20 @@ import org.onosproject.net.HostId;
 import org.onosproject.net.HostLocation;
 import org.onosproject.net.provider.ProviderId;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
+
+import static edu.uta.flowsched.Util.bitToMbit;
 
 class FLHost extends DefaultHost {
     private String flClientID;
     private String flClientCID;
     private MyPath currentC2SPath;
     private MyPath currentS2CPath;
-
     public final NetworkStats networkStats;
+
 
     public FLHost(ProviderId providerId, HostId id, MacAddress mac, VlanId vlan, HostLocation location, Set<IpAddress> ips
             , String flClientID, String flClientCID, Annotations... annotations) {
@@ -71,26 +73,50 @@ class FLHost extends DefaultHost {
             return this.currentS2CPath;
         } else if (direction.equals(FlowDirection.C2S)) {
             return this.currentC2SPath;
-        }
-        else throw new RuntimeException("Direction should be assigned");
+        } else throw new RuntimeException("Direction should be assigned");
     }
 
-    static class NetworkStats {
+    class NetworkStats {
         private final LinkedList<Long> lastPositiveTXRate;
         private final LinkedList<Long> lastPositiveRXRate;
         private final LinkedList<Long> lastTXRate;
         private final LinkedList<Long> lastRXRate;
 
-        private final long[] roundSentData;
-        private final long[] roundReceivedData;
+        private final ConcurrentHashMap<Integer, Long> roundSentData;
+        private final ConcurrentHashMap<Integer, Long> roundReceivedData;
 
         public NetworkStats() {
             this.lastTXRate = new LinkedList<>();
             this.lastRXRate = new LinkedList<>();
             this.lastPositiveTXRate = new LinkedList<>();
             this.lastPositiveRXRate = new LinkedList<>();
-            this.roundSentData = new long[55];
-            this.roundReceivedData = new long[55];
+            this.roundSentData = new ConcurrentHashMap<>();
+            this.roundReceivedData = new ConcurrentHashMap<>();
+        }
+
+        public String printStats() {
+            StringBuilder builder = new StringBuilder();
+            try {
+                int c2SRound = GreedyFlowScheduler.C2S_INSTANCE.getRound();
+                int s2cRound = GreedyFlowScheduler.S2C_INSTANCE.getRound();
+
+                builder.append(s2cRound).append(",");
+                builder.append(c2SRound).append(",");
+
+                builder.append(bitToMbit(getRoundReceivedData(s2cRound))).append(",");
+                builder.append(bitToMbit(getRoundSentData(c2SRound))).append(",");
+
+                builder.append(getLastPositiveTXRate()).append(",")
+                        .append(getLastPositiveRXRate()).append(",");
+
+                builder.append(getLastTXRate()).append(",")
+                        .append(getLastRXRate());
+
+                builder.append("\n");
+            } catch (Exception e) {
+                builder.append("ERROR: ").append(e.getMessage()).append("...").append(Arrays.toString(e.getStackTrace()));
+            }
+            return builder.toString();
         }
 
         public long getLastPositiveTXRate() {
@@ -110,55 +136,55 @@ class FLHost extends DefaultHost {
             return dir.equals(FlowDirection.S2C) ? this.getRoundReceivedData(round) : this.getRoundSentData(round);
         }
 
-        public List<Long> getLastTXRate() {
-            return lastTXRate;
+        public long getLastTXRate() {
+            return (long) lastTXRate.stream().mapToLong(Long::longValue).average().orElse(0);
         }
 
-        public List<Long> getLastRXRate() {
-            return lastRXRate;
+        public long getLastRXRate() {
+            return (long) lastRXRate.stream().mapToLong(Long::longValue).average().orElse(0);
         }
 
         public void setLastPositiveTXRate(long lastPositiveTXRate) {
             this.lastPositiveTXRate.addLast(lastPositiveTXRate);
-            // keep it limited to 5
+            // keep it limited to 0
             if (this.lastPositiveTXRate.size() > 3)
                 this.lastPositiveTXRate.removeFirst();
         }
 
         public void setLastPositiveRXRate(long lastPositiveRXRate) {
             this.lastPositiveRXRate.addLast(lastPositiveRXRate);
-            // keep it limited to 5
-            if (this.lastPositiveRXRate.size() > 3)
+            // keep it limited to 0
+            if (this.lastPositiveRXRate.size() > 5)
                 this.lastPositiveRXRate.removeFirst();
         }
 
         public void setLastTXRate(long lastTXRate) {
             this.lastTXRate.add(lastTXRate);
-            if (this.lastTXRate.size() > 10)
+            if (this.lastTXRate.size() > 5)
                 this.lastTXRate.removeFirst();
 
         }
 
         public void setLastRXRate(long lastRXRate) {
             this.lastRXRate.add(lastRXRate);
-            if (this.lastRXRate.size() > 10)
+            if (this.lastRXRate.size() > 3)
                 this.lastRXRate.removeFirst();
         }
 
         public long getRoundSentData(int round) {
-            return this.roundSentData[round];
+            return this.roundSentData.get(round);
         }
 
         public void setRoundSentData(int round, long value) {
-            this.roundSentData[round] += value;
+            this.roundSentData.compute(round, (k, v) -> v == null ? value : value + v);
         }
 
         public long getRoundReceivedData(int round) {
-            return this.roundReceivedData[round];
+            return this.roundReceivedData.get(round);
         }
 
         public void setRoundReceivedData(int round, long value) {
-            this.roundReceivedData[round] += value;
+            this.roundReceivedData.compute(round, (k, v) -> v == null ? value : value + v);
         }
     }
 }

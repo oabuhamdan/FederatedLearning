@@ -11,12 +11,15 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 
 public class Util {
     static int POLL_FREQ = getPollFreq();
     static final long MODEL_SIZE = 20 * 1_000_000 * 8; // 20 Mega-bit
-    static final MacAddress FL_SERVER_MAC = MacAddress.valueOf("00:00:00:00:00:AA");
+    static final MacAddress FL_SERVER_MAC = MacAddress.valueOf("00:00:00:00:00:FA");
     static final Host SERVER_HOST = Services.hostService.getHost(HostId.hostId(FL_SERVER_MAC));
     private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Util.class);
     final static ConcurrentHashMap<String, BufferedWriter> LOGGERS = new ConcurrentHashMap<>();
@@ -62,27 +65,6 @@ public class Util {
             num2 = 1;
         }
         return num1.doubleValue() / num2.doubleValue();
-    }
-
-    public static String pathFormat(Path path) {
-        StringBuilder stringBuilder = new StringBuilder();
-        for (Link link : path.links()) {
-            ElementId id = link.src().elementId();
-            if (id instanceof HostId) {
-                if (((HostId) id).mac() == Util.FL_SERVER_MAC)
-                    stringBuilder.append("FLServer");
-                else
-                    stringBuilder.append("FL#").append(ClientInformationDatabase.INSTANCE.getHostByHostID((HostId) id).get().getFlClientCID());
-            } else {
-                stringBuilder.append(id.toString().substring(15));
-            }
-            stringBuilder.append(" -> ");
-        }
-        if (path.dst().hostId().mac() == Util.FL_SERVER_MAC)
-            stringBuilder.append("FLServer");
-        else
-            stringBuilder.append("FL#").append(ClientInformationDatabase.INSTANCE.getHostByHostID(path.dst().hostId()).get().getFlClientCID());
-        return stringBuilder.toString();
     }
 
     static void log(String loggerNames, String message) {

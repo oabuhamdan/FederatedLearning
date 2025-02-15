@@ -22,6 +22,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Skeletal ONOS application component.
@@ -33,6 +36,7 @@ import java.io.File;
 public class AppComponent {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
+    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
     @Activate
     protected void activate() {
@@ -45,6 +49,19 @@ public class AppComponent {
         GreedyFlowScheduler.activate();
         ZeroMQServer.INSTANCE.activate();
         log.info("Started");
+        executor.scheduleAtFixedRate(Util::flushWriters, 10, 10, TimeUnit.SECONDS);
+    }
+
+    @Deactivate
+    protected void deactivate() {
+        LinkInformationDatabase.INSTANCE.deactivate();
+        PathInformationDatabase.INSTANCE.deactivate();
+        ZeroMQServer.INSTANCE.deactivate();
+        ClientInformationDatabase.INSTANCE.deactivate();
+        GreedyFlowScheduler.deactivate();
+        Util.closeWriters();
+        executor.shutdownNow();
+        log.info("Stopped");
     }
 
     private void createLogDir() {
@@ -62,14 +79,4 @@ public class AppComponent {
         }
     }
 
-    @Deactivate
-    protected void deactivate() {
-        LinkInformationDatabase.INSTANCE.deactivate();
-        PathInformationDatabase.INSTANCE.deactivate();
-        ZeroMQServer.INSTANCE.deactivate();
-        ClientInformationDatabase.INSTANCE.deactivate();
-        GreedyFlowScheduler.deactivate();
-        Util.closeWriters();
-        log.info("Stopped");
-    }
 }

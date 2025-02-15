@@ -8,6 +8,7 @@ import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.FlowRule;
 import org.onosproject.net.flow.TrafficSelector;
 import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.criteria.Criterion;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -21,20 +22,13 @@ import static org.onlab.packet.Ethernet.TYPE_IPV4;
 public class PathRulesInstaller {
     public static final PathRulesInstaller INSTANCE = new PathRulesInstaller();
     private static final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
-
     private static int PRIORITY = 20;
-
-
-    enum Direction {
-        SERVER_TO_CLIENT,
-        CLIENT_TO_SERVER,
-    }
 
     public void increasePriority() {
         PRIORITY++;
     }
 
-    public void installPathRules(FLHost flHost, Path path) {
+    public void installPathRules(FLHost flHost, Path path, boolean permanent) {
         List<FlowRule> rules = new LinkedList<>();
         List<Link> links = path.links();
         PortNumber outPort;
@@ -43,29 +37,39 @@ public class PathRulesInstaller {
         for (int i = 1; i < links.size(); i++) {
             outPort = links.get(i).src().port();
             deviceId = links.get(i).src().deviceId();
-            rules.add(getFlowEntry(deviceId, flHost.mac(), outPort, inPort, path));
+            rules.add(getFlowEntry(deviceId, flHost.mac(), outPort, inPort, path, permanent));
             inPort = links.get(i).dst().port();
         }
         Services.flowRuleService.applyFlowRules(rules.toArray(new FlowRule[0]));
-//        scheduledExecutorService.schedule(() -> debugRules(flHost, rules, path), 10, TimeUnit.SECONDS);
     }
 
-    private void debugRules(FLHost flHost, List<FlowRule> rules, Path path) {
-        String dir = path.dst().hostId().mac().equals(Util.FL_SERVER_MAC)? "C2S": "S2C";
+    private void debugRules(FLHost flHost, List<FlowRule> rules, Path path, int delay) {
+        String dir = path.dst().hostId().mac().equals(Util.FL_SERVER_MAC) ? "C2S" : "S2C";
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format("\t******* Log %s for Client %s  *******\n", dir, flHost.getFlClientCID()));
-        StreamSupport.stream(Services.flowRuleService.getFlowEntriesById(Services.appId).spliterator(), false)
-                .filter(rules::contains).forEach(flowRule -> stringBuilder
-                .append("\t\tDev:")
-                .append(flowRule.deviceId().toString().substring(15))
-                .append(" Bytes: ")
-                .append(flowRule.bytes())
-                .append("\n"));
-        Util.log("flow_debug", stringBuilder.toString());
+        int round = dir.equals("C2S") ? GreedyFlowScheduler.C2S_INSTANCE.getRound() : GreedyFlowScheduler.S2C_INSTANCE.getRound();
+
+        stringBuilder.append(String.format("\t******* Log %s for Client %s For Round %s Delay %s *******\n", dir, flHost.getFlClientCID(), round, delay));
+        rules.forEach(flowRule ->
+                StreamSupport.stream(Services.flowRuleService.getFlowEntries(flowRule.deviceId()).spliterator(), false)
+                        .filter(flowEntry -> flowRule.selector().getCriterion(Criterion.Type.ETH_SRC).equals(flowEntry.selector().getCriterion(Criterion.Type.ETH_SRC)))
+                        .filter(flowEntry -> flowRule.selector().getCriterion(Criterion.Type.ETH_DST).equals(flowEntry.selector().getCriterion(Criterion.Type.ETH_DST)))
+                        .forEach(flowEntry -> {
+                            stringBuilder
+                                    .append("\t\tDev:").append(flowEntry.deviceId().toString().substring(15))
+                                    .append(" - Application: ").append(Services.coreService.getAppId(flowEntry.appId()).name())
+                                    .append(" - Life: ").append(flowEntry.life())
+                                    .append(" - State: ").append(flowEntry.state().name())
+                                    .append(" - Bytes: ").append(flowEntry.bytes())
+                                    .append(" - Priority: ").append(flowEntry.priority())
+                                    .append(" - Output: ").append(flowEntry.treatment().allInstructions().get(0).toString())
+                                    .append(" - isPermanent: ").append(flowEntry.isPermanent())
+                                    .append("\n");
+                        }));
+        Util.log("debug_rules" + dir, stringBuilder.toString());
     }
 
 
-    private FlowRule getFlowEntry(DeviceId dId, MacAddress hostMac, PortNumber outPort, PortNumber inPort, Path path) {
+    private FlowRule getFlowEntry(DeviceId dId, MacAddress hostMac, PortNumber outPort, PortNumber inPort, Path path, boolean permanent) {
         TrafficTreatment treatment = DefaultTrafficTreatment.builder()
 //                .setIpDscp((byte) DscpClass.EF.getValue())
 //                .setQueue(1)
@@ -79,13 +83,19 @@ public class PathRulesInstaller {
                 .matchEthType(TYPE_IPV4)
                 .matchIPProtocol(IPv4.PROTOCOL_TCP);
 
-        return DefaultFlowRule.builder()
+
+        FlowRule.Builder ruleBuilder = DefaultFlowRule.builder()
                 .withTreatment(treatment)
                 .withSelector(selector.build())
                 .forDevice(dId)
                 .withPriority(PRIORITY)
-                .fromApp(Services.appId)
-                .makeTemporary(5)
-                .build();
+                .fromApp(Services.appId);
+
+        if (permanent)
+            ruleBuilder.makePermanent();
+        else
+            ruleBuilder.makeTemporary(5);
+
+        return ruleBuilder.build();
     }
 }

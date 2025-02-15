@@ -2,7 +2,9 @@ package edu.uta.flowsched;
 
 import org.onlab.packet.MacAddress;
 import org.onlab.util.KryoNamespace;
-import org.onosproject.net.*;
+import org.onosproject.net.Host;
+import org.onosproject.net.HostId;
+import org.onosproject.net.HostLocation;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.PortStatistics;
@@ -14,20 +16,17 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import static edu.uta.flowsched.Util.bitToMbit;
 import static org.onosproject.net.device.DeviceEvent.Type.PORT_STATS_UPDATED;
 
 public class ClientInformationDatabase {
     public static final ClientInformationDatabase INSTANCE = new ClientInformationDatabase();
     private EventuallyConsistentMap<Host, FLHost> FL_HOSTS;
-    private LinkThroughputWatcher linkThroughputWatcher;
-    private static int HOST_COUNT = 10;
+    private PortThroughputWatcher portThroughputWatcher;
 
     protected void activate() {
-        KryoNamespace.Builder mySerializer = KryoNamespace.newBuilder().register(KryoNamespaces.API)
-                .register(FLHost.class);
-        linkThroughputWatcher = new LinkThroughputWatcher();
-        Services.deviceService.addListener(linkThroughputWatcher);
+        KryoNamespace.Builder mySerializer = KryoNamespace.newBuilder().register(KryoNamespaces.API).register(FLHost.class);
+        portThroughputWatcher = new PortThroughputWatcher();
+        Services.deviceService.addListener(portThroughputWatcher);
 
         FL_HOSTS = Services.storageService.<Host, FLHost>eventuallyConsistentMapBuilder()
                 .withName("FL_HOSTS")
@@ -65,25 +64,34 @@ public class ClientInformationDatabase {
 
     protected void deactivate() {
         FL_HOSTS.clear();
-        Services.deviceService.removeListener(linkThroughputWatcher);
+        Services.deviceService.removeListener(portThroughputWatcher);
     }
 
     public Collection<FLHost> getFLHosts() {
         return Collections.unmodifiableCollection(FL_HOSTS.values());
     }
 
-    private class LinkThroughputWatcher implements DeviceListener {
+    public int getTotalFLClients() {
+        return FL_HOSTS.size();
+    }
+
+    private class PortThroughputWatcher implements DeviceListener {
         AtomicInteger currentCount = new AtomicInteger(0);
         long threshold = (long) 1e6; // 2Mbps
+        int deviceCount = Services.deviceService.getDeviceCount();
 
         @Override
         public void event(DeviceEvent event) {
             DeviceEvent.Type type = event.type();
-            if (type == PORT_STATS_UPDATED) {
-                if (currentCount.incrementAndGet() >= HOST_COUNT) {
-                    currentCount.set(0);
-                    updateDeviceLinksUtilization();
+            try {
+                if (type == PORT_STATS_UPDATED) {
+                    if (currentCount.incrementAndGet() >= deviceCount) {
+                        currentCount.set(0);
+                        updateDeviceLinksUtilization();
+                    }
                 }
+            } catch (Exception e) {
+                Util.log("general", "Error inside PortThroughputWatcher..." + Arrays.toString(e.getStackTrace()));
             }
         }
 
@@ -94,7 +102,7 @@ public class ClientInformationDatabase {
                 long receivedBits = portStatistics.bytesReceived() * 8;
                 long sentBits = portStatistics.bytesSent() * 8;
                 long receivedRate = receivedBits / Util.POLL_FREQ;
-                long sentRate = sentBits/ Util.POLL_FREQ;
+                long sentRate = sentBits / Util.POLL_FREQ;
 
                 flHost.networkStats.setLastRXRate(sentRate); // RX Rate for Host is the TX Rate for Port
                 flHost.networkStats.setLastTXRate(receivedRate); // TX Rate for Host is the RX Rate for Port
@@ -107,9 +115,6 @@ public class ClientInformationDatabase {
                 if (receivedRate > threshold) {
                     flHost.networkStats.setLastPositiveTXRate(receivedRate);
                 }
-
-//                roundSentData.get(flHost).set(ZeroMQServer.getCurrentRound(), portStatistics.bytesSent() * 8);
-//                roundReceivedData.get(flHost).set(ZeroMQServer.getCurrentRound(), portStatistics.bytesSent() * 8);
             });
         }
     }

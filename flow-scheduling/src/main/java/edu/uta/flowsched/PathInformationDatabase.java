@@ -2,14 +2,12 @@ package edu.uta.flowsched;
 
 import org.onlab.util.KryoNamespace;
 import org.onosproject.net.HostId;
+import org.onosproject.net.Path;
 import org.onosproject.store.serializers.KryoNamespaces;
 import org.onosproject.store.service.EventuallyConsistentMap;
 import org.onosproject.store.service.WallClockTimestamp;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -50,13 +48,11 @@ public class PathInformationDatabase {
 
     public Set<MyPath> getPathsToServer(FLHost host) {
         Set<MyPath> paths = Optional.ofNullable(CLIENT_TO_SERVER_PATHS.get(host.id())).orElse(Set.of());
-        Util.log("general", String.format("%s CLIENT_TO_SERVER_PATHS paths found for client %s", paths.size(), host.getFlClientCID()));
         return paths;
     }
 
     public Set<MyPath> getPathsToClient(FLHost host) {
         Set<MyPath> paths = Optional.ofNullable(SERVER_TO_CLIENT_PATHS.get(host.id())).orElse(Set.of());
-        Util.log("general", String.format("%s SERVER_TO_CLIENT_PATHS paths found for client %s", paths.size(), host.getFlClientCID()));
         return paths;
     }
 
@@ -64,6 +60,8 @@ public class PathInformationDatabase {
         Set<MyPath> paths = Services.pathService.getKShortestPaths(hostId, HostId.hostId(Util.FL_SERVER_MAC))
                 .limit(10).map(MyPath::new)
                 .collect(Collectors.toSet());
+
+        PathRulesInstaller.INSTANCE.installPathRules(ClientInformationDatabase.INSTANCE.getHostByHostID(hostId).get(), (Path) paths.toArray()[0], true);
         CLIENT_TO_SERVER_PATHS.put(hostId, paths);
     }
 
@@ -71,6 +69,8 @@ public class PathInformationDatabase {
         Set<MyPath> paths = Services.pathService.getKShortestPaths(HostId.hostId(Util.FL_SERVER_MAC), hostId)
                 .limit(10).map(MyPath::new)
                 .collect(Collectors.toSet());
+
+        PathRulesInstaller.INSTANCE.installPathRules(ClientInformationDatabase.INSTANCE.getHostByHostID(hostId).get(), (Path) paths.toArray()[0], true);
         SERVER_TO_CLIENT_PATHS.put(hostId, paths);
     }
 
@@ -88,13 +88,13 @@ public class PathInformationDatabase {
         Util.log("paths", "***************Server to Clients Paths***************");
         for (FLHost host : ClientInformationDatabase.INSTANCE.getFLHosts()) {
             StringBuilder stringBuilder = new StringBuilder(String.format("***** Paths for Client %s ****\n", host.getFlClientCID()));
-            getPathsToClient(host).forEach(myPath -> stringBuilder.append(Util.pathFormat(myPath)).append("\n"));
+            getPathsToClient(host).forEach(myPath -> stringBuilder.append(myPath.format()).append("\n"));
             Util.log("paths", stringBuilder.toString());
         }
         Util.log("paths", "***************Client to Server Paths***************");
         for (FLHost host : ClientInformationDatabase.INSTANCE.getFLHosts()) {
             StringBuilder stringBuilder = new StringBuilder(String.format("***** Paths for Client %s ****\n", host.getFlClientCID()));
-            getPathsToServer(host).forEach(myPath -> stringBuilder.append(Util.pathFormat(myPath)).append("\n"));
+            getPathsToServer(host).forEach(myPath -> stringBuilder.append(myPath.format()).append("\n"));
             Util.log("paths", stringBuilder.toString());
         }
     }

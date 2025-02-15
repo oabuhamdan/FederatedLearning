@@ -2,25 +2,22 @@ package edu.uta.flowsched;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static edu.uta.flowsched.Util.bitToMbit;
 
-@SuppressWarnings("Convert2MethodRef")
 public class GreedyFlowScheduler {
     public static final GreedyFlowScheduler S2C_INSTANCE = new GreedyFlowScheduler(FlowDirection.S2C);
     public static final GreedyFlowScheduler C2S_INSTANCE = new GreedyFlowScheduler(FlowDirection.C2S);
     private static final double SWITCH_THRESHOLD = 0.3;
-    private static final long DATA_SIZE = 138_400_000; // 17MByte
+    private static final long DATA_SIZE = 140_000_000; // 17MByte
     private static final long ALMOST_DONE_DATA_THRESH = DATA_SIZE / 5; // 17MByte
-    private static final int TOTAL_CLIENTS = 10;
     private static ExecutorService executor;
     private static ScheduledExecutorService waitExecutor;
     private final FlowDirection direction;
     private final ConcurrentLinkedQueue<FLHost> clientQueue;
     private final Map<FLHost, Set<MyPath>> clientPaths;
-
     private final Map<FLHost, Integer> completionTimes;
     private final Map<FLHost, Long> dataRemaining;
     private final Map<FLHost, Long> assumedRates;
@@ -28,7 +25,7 @@ public class GreedyFlowScheduler {
     private final ConcurrentLinkedQueue<FLHost> needPhase2Processing;
     private final ConcurrentLinkedQueue<FLHost> completedClients;
     private ScheduledFuture<?> future;
-    private int round;
+    private final AtomicInteger round;
 
 
     public GreedyFlowScheduler(FlowDirection direction) {
@@ -42,22 +39,23 @@ public class GreedyFlowScheduler {
         needPhase2Processing = new ConcurrentLinkedQueue<>();
         completedClients = new ConcurrentLinkedQueue<>();
         future = null;
-        round = 1;
+        round = new AtomicInteger(1);
     }
 
     public static void activate() {
-        Util.log("greedy", "Activated ...");
+//        Util.log("greedy", "Activated ...");
         executor = Executors.newFixedThreadPool(2);
-        waitExecutor = Executors.newScheduledThreadPool(TOTAL_CLIENTS);
+        waitExecutor = Executors.newScheduledThreadPool(10);
     }
 
     public void startScheduling() {
-        Util.log("greedy", String.format("Round %s Started for %s", round, direction));
+        Util.log("greedy" + this.direction, String.format("******** Round %s Started **********", round));
+//        Util.log("debug_paths" + this.direction, String.format("******** Round %s Started **********", round));
         executor.submit(this::scheduleFlows);
     }
 
     public int getRound() {
-        return round;
+        return round.get();
     }
 
     public static void deactivate() {
@@ -65,13 +63,12 @@ public class GreedyFlowScheduler {
     }
 
     public void addClient(FLHost client, Set<MyPath> paths) {
-        clientQueue.offer(client); // Add client to the queue
+        clientQueue.offer(client);
         if (!clientPaths.containsKey(client)) {
             clientPaths.put(client, paths);
         }
-//        Util.log("greedy", String.format("Added Client %s to Queue ...", client.getFlClientCID()));
         synchronized (this) {
-            notify(); // Notify the scheduler in case it's waiting
+            notify();
         }
     }
 
@@ -79,7 +76,7 @@ public class GreedyFlowScheduler {
         FLHost client;
         while ((client = clientQueue.poll()) != null) {
             phase1Queue.add(client);
-//            Util.log("greedy", String.format("Added Client %s to Active in %s ...", client.getFlClientCID(), direction));
+            dataRemaining.put(client, DATA_SIZE);
         }
     }
 
@@ -96,68 +93,78 @@ public class GreedyFlowScheduler {
     }
 
     private void scheduleFlows() {
-        while (completedClients.size() < TOTAL_CLIENTS) {
+        while (completedClients.size() < ClientInformationDatabase.INSTANCE.getTotalFLClients()) {
             try {
                 getClientsFromQueue(needPhase1Processing);
-                StringBuilder phase1Logger = new StringBuilder("***Processing in Phase1 ****\n");
+                long tik = System.currentTimeMillis();
+                StringBuilder phase1Logger = new StringBuilder("\tPhase 1:\n");
 
                 FLHost client;
                 while ((client = needPhase1Processing.poll()) != null) {
-                    if (!clientAlmostDone(client, dataRemaining, completionTimes))
-                        processClient(client, completionTimes, dataRemaining, assumedRates, phase1Logger);
-
+                    if (!clientAlmostDone(client))
+                        processClient(client, phase1Logger);
                     needPhase2Processing.add(client);
                 }
-
                 if (!needPhase2Processing.isEmpty()) {
-                    phase2(completionTimes, dataRemaining, assumedRates, needPhase1Processing, needPhase2Processing, completedClients);
+                    phase2();
                 }
-
-                Util.log("greedy", phase1Logger.toString());
+                Util.log("overhead", String.format("controller,phase1,%s", System.currentTimeMillis() - tik));
+                Util.log("greedy" + this.direction, phase1Logger.toString());
                 PathRulesInstaller.INSTANCE.increasePriority();
             } catch (Exception e) {
-                Util.log("greedy", "Error in scheduler: " + e.getMessage() + "...." + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray()));
+                Util.log("greedy" + this.direction, "Error in scheduler: " + e.getMessage() + "...." + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray()));
+                break;
             }
         }
         completedClients.clear();
         needPhase1Processing.clear();
         needPhase2Processing.clear();
-        Util.log("greedy", String.format("Completed Round %s for %s", round++, direction));
+        dataRemaining.clear();
+        completionTimes.clear();
+        assumedRates.clear();
+
+        Util.log("greedy" + this.direction, String.format("******** Round %s Completed ********\n", round.getAndIncrement()));
         Util.flushWriters();
     }
 
 
-    private void processClient(FLHost client, Map<FLHost, Integer> completionTimes, Map<FLHost, Long> dataRemaining,
-                               Map<FLHost, Long> artAssignedRates, StringBuilder internalLogger) {
+    private void processClient(FLHost client, StringBuilder internalLogger) {
         Set<FLHost> affectedClients = ConcurrentHashMap.newKeySet();
-        dataRemaining.putIfAbsent(client, DATA_SIZE);
-        StringBuilder clientLogger = new StringBuilder(String.format("\t**Processing Client %s**\n", client.getFlClientCID()));
+        StringBuilder clientLogger = new StringBuilder(String.format("\t- Client %s: \n", client.getFlClientCID()));
 
-        List<PathScore> bestPaths = findBestPath(client);
         MyPath currentPath = client.getCurrentPath(this.direction);
-        if (shouldSwitchPath(client, bestPaths, internalLogger)) {
-            if (currentPath != null) {
-                clientLogger.append(String.format("\t\tCurrent Path: %s\n", Util.pathFormat(currentPath)));
+        Set<MyPath> paths = new HashSet<>(clientPaths.get(client));
+        boolean pathIsNull = currentPath == null;
+
+        if (!pathIsNull) {// Simulate Path
+            SimMyPath simPath = new SimMyPath(currentPath, client.networkStats.getLastPositiveRate(this.direction));
+            paths.remove(currentPath); // replace old with sim
+            paths.add(simPath);
+        }
+
+        HashMap<MyPath, Double> bestPaths = scorePaths(paths);
+        Map.Entry<MyPath, Double> bestPath = bestPaths.entrySet()
+                .stream()
+                .max(Comparator.comparingDouble(Map.Entry::getValue))
+                .orElseThrow(() -> new NoSuchElementException("Map is empty"));
+
+        if (shouldSwitchPath(currentPath, bestPath, bestPaths, clientLogger)) {
+            if (!pathIsNull) {
+                clientLogger.append(String.format("\t\tCurrent Path: %s\n", currentPath.format()));
                 affectedClients.addAll(currentPath.removeFlow(client, this.direction));
             }
-//            int affectedByRemove = affectedClients.size();
 
-            MyPath bestPath = bestPaths.get(0).path;
-            updateClientPath(client, bestPath, affectedClients, clientLogger);
-            updateTimeAndRate(client, affectedClients, completionTimes, dataRemaining, artAssignedRates);
-//            logAffectedClients(affectedClients, artAssignedRates, affectedByRemove, clientLogger);
-
-            PathRulesInstaller.INSTANCE.installPathRules(client, bestPath);
+            updateClientPath(client, bestPath.getKey(), affectedClients, clientLogger);
+            updateTimeAndRate(client, affectedClients);
+            PathRulesInstaller.INSTANCE.installPathRules(client, bestPath.getKey(), false);
         }
         internalLogger.append(clientLogger);
     }
 
-    private void phase2(Map<FLHost, Integer> completionTimes, Map<FLHost, Long> dataRemaining,
-                        Map<FLHost, Long> artAssignedRates, ConcurrentLinkedQueue<FLHost> needPhase1Processing,
-                        ConcurrentLinkedQueue<FLHost> needPhase2Processing, ConcurrentLinkedQueue<FLHost> completedClients) {
+    private void phase2() {
         if (future == null || future.isDone()) {
             future = waitExecutor.schedule(() -> {
-                updateClientsStatus(needPhase2Processing, needPhase1Processing, completedClients, completionTimes, dataRemaining, artAssignedRates);
+                updateClientsStats();
                 synchronized (this) {
                     notifyAll(); // Notify the scheduler in case it's waiting
                 }
@@ -165,8 +172,7 @@ public class GreedyFlowScheduler {
         }
     }
 
-
-    private boolean clientAlmostDone(FLHost client, Map<FLHost, Long> dataRemaining, Map<FLHost, Integer> completionTimes) {
+    private boolean clientAlmostDone(FLHost client) {
         return dataRemaining.getOrDefault(client, DATA_SIZE) <= ALMOST_DONE_DATA_THRESH || completionTimes.getOrDefault(client, 100) <= 3;
     }
 
@@ -199,70 +205,69 @@ public class GreedyFlowScheduler {
         }
     }
 
-
-    private List<PathScore> findBestPath(FLHost client) {
-        Set<MyPath> paths = clientPaths.get(client);
-
-//        TotalLoadComparator comparator = new TotalLoadComparator(paths, 0.6, 0.2, 0.1, 0.1);
-        Function<MyPath, Number> pathScore = path -> path.getBottleneckFreeCap() / 1e6;
-
-        List<PathScore> pathScores = paths.stream()
-                .map(path -> new PathScore(path, pathScore.apply(path)))
-                .sorted(Comparator.comparing(ps -> ((PathScore) ps).score.doubleValue()).reversed())
-                .collect(Collectors.toList());
-
-//        debugPaths(client, comparator, pathScores);
+    private HashMap<MyPath, Double> scorePaths(Set<MyPath> paths) {
+        TotalLoadComparator comparator = new TotalLoadComparator(paths, 0.6, 0.2, 0.1, 0.1);
+        Function<MyPath, Number> pathScore = path -> comparator.computeScore(path)[0];
+        HashMap<MyPath, Double> pathScores = new HashMap<>();
+        paths.forEach(path -> pathScores.put(path, pathScore.apply(path).doubleValue()));
+//        debugPaths(pathScores);
         return pathScores;
     }
 
-    private void debugPaths(FLHost client, TotalLoadComparator comparator, List<PathScore> pathScores) {
-        StringBuilder builder = new StringBuilder(String.format("\tLog paths score for client %s direction %s\n", client.getFlClientCID(), this.direction));
-        pathScores.forEach(ps -> builder.append("\t\tScore: ").append(comparator.debugScore(ps.path)).append("Path: ").append(ps.path.format()).append("\n"));
-        Util.log("debug_paths", builder.toString());
+    private void debugPaths(HashMap<MyPath, Double> pathScores) {
+        StringBuilder builder = new StringBuilder("\tLog paths score for client\n");
+        pathScores.forEach((path, score) -> builder.append("\t\tScore: ").append(score).append("- Path: ").append(path.format()).append("\n"));
+        Util.log("debug_paths" + this.direction, builder.toString());
     }
 
-    private boolean shouldSwitchPath(FLHost client, List<PathScore> bestPaths, StringBuilder internalLogger) {
-        MyPath currentPath = client.getCurrentPath(this.direction);
-        if (currentPath == null) return true;
+    private void debugPaths(TotalLoadComparator comparator, List<PathScore> pathScores) {
+        StringBuilder builder = new StringBuilder("\tLog paths score for client\n");
+        pathScores.forEach(ps -> builder.append("\t\tScore: ").append(comparator.debugScore(ps.path)).append("- Path: ").append(ps.path.format()).append("\n"));
+        Util.log("debug_paths" + this.direction, builder.toString());
+    }
 
-        double currentScore = bestPaths.get(bestPaths.indexOf(new PathScore(currentPath, 0))).score.doubleValue();
-        double bestScore = bestPaths.get(0).score.doubleValue();
+    private boolean shouldSwitchPath(MyPath currentPath, Map.Entry<MyPath, Double> bestPath, HashMap<MyPath, Double> bestPaths, StringBuilder clientLogger) {
+        if (currentPath == null) return true;
+        if (bestPath.getKey().equals(currentPath)) {
+            clientLogger.append("\t\tCurrent Path is Best Path, Returning...\n");
+            return false;
+        }
+
+        double currentScore = bestPaths.get(currentPath);
+        double bestScore = bestPath.getValue();
         boolean switching = (bestScore - currentScore) / currentScore >= SWITCH_THRESHOLD;
         if (switching)
-            internalLogger.append(String.format("\t\tSwitching Path for Client %s. New Score: %s, Old Score: %s\n", client.getFlClientCID(), bestScore, currentScore));
+            clientLogger.append(String.format("\t\tSwitching - New Score: (%.2f), Current Score: (%.2f)\n", bestScore, currentScore));
+        else
+            clientLogger.append(String.format("\t\tNo Switching - Current Score (%.2f), New Score (%.2f)\n", bestScore, currentScore));
         return switching;
     }
 
     private void updateClientPath(FLHost client, MyPath newPath, Set<FLHost> affectedClients, StringBuilder clientLogger) {
         affectedClients.addAll(newPath.addFlow(client, this.direction));
         client.setCurrentPath(newPath, this.direction);
-        clientLogger.append(String.format("\t\tNew Path - Rate %sMbps, ActiveFlows %.2f: %s\n",
-                bitToMbit(newPath.getCurrentFairShare()), newPath.getCurrentActiveFlows(), Util.pathFormat(newPath)));
+        clientLogger.append(String.format("\t\tRate %sMbps, ActiveFlows %.2f: %s\n",
+                bitToMbit(newPath.getCurrentFairShare()), newPath.getCurrentActiveFlows(), newPath.format()));
     }
 
-    private void updateTimeAndRate(FLHost client, Set<FLHost> affectedClients,
-                                   Map<FLHost, Integer> completionTimes, Map<FLHost, Long> dataRemaining, Map<FLHost, Long> artAssignedRates) {
-
+    private void updateTimeAndRate(FLHost client, Set<FLHost> affectedClients) {
         long fairShare = client.getCurrentPath(this.direction).getCurrentFairShare();
         int completionTime = (int) Math.round(1.0 * dataRemaining.get(client) / fairShare);
         completionTimes.put(client, completionTime);
-        artAssignedRates.put(client, fairShare);
+        assumedRates.put(client, fairShare);
 
         for (FLHost affectedClient : affectedClients) {
             long updatedFairShare = affectedClient.getCurrentPath(this.direction).getCurrentFairShare();
             int updatedCompletionTime = (int) Math.round(1.0 * dataRemaining.get(affectedClient) / updatedFairShare);
             completionTimes.put(affectedClient, updatedCompletionTime);
-            artAssignedRates.put(affectedClient, updatedFairShare);
+            assumedRates.put(affectedClient, updatedFairShare);
         }
     }
 
-    private void updateClientsStatus(ConcurrentLinkedQueue<FLHost> needPhase2Processing,
-                                     ConcurrentLinkedQueue<FLHost> needPhase1Processing,
-                                     ConcurrentLinkedQueue<FLHost> completedClients,
-                                     Map<FLHost, Integer> completionTimes,
-                                     Map<FLHost, Long> dataRemaining,
-                                     Map<FLHost, Long> artAssignedRates) {
+    private void updateClientsStats() {
+
         StringBuilder phase2Logger = new StringBuilder();
+        long tik = System.currentTimeMillis();
 
         phase2Logger.append("\tPhase 2: ");
         needPhase1Processing.forEach(h -> phase2Logger.append(h.getFlClientCID()).append(","));
@@ -272,7 +277,8 @@ public class GreedyFlowScheduler {
             FLHost client;
             while ((client = needPhase2Processing.poll()) != null) {
                 long assignedRate = (long) Math.max(client.networkStats.getLastPositiveRate(this.direction), 1e6);
-                long dataRemain = DATA_SIZE - client.networkStats.getRoundExchangedData(this.direction, round);
+                long roundExchangedData = client.networkStats.getRoundExchangedData(this.direction, round.get());
+                long dataRemain = DATA_SIZE - roundExchangedData;
                 int remainingTime = (int) (dataRemain / assignedRate);
 
                 if (remainingTime <= 0 || dataRemain <= 0) {
@@ -281,7 +287,7 @@ public class GreedyFlowScheduler {
                     if (path != null) {
                         path.removeFlow(client, this.direction);
                     } else {
-                        phase2Logger.append(String.format("\t - !! Client %s has no %s Path !!", client.getFlClientCID(), this.direction));
+                        phase2Logger.append(String.format("\t - !! Client %s has no %s Path !!\n", client.getFlClientCID(), this.direction));
                     }
                     client.setCurrentPath(null, this.direction);
                     completionTimes.remove(client);
@@ -291,42 +297,16 @@ public class GreedyFlowScheduler {
                     completionTimes.put(client, remainingTime);
                     needPhase1Processing.add(client);
                 }
-                phase2Logger.append(String.format("\t - Client %s: Art Rate: %sMbps, Real Rate:%sMbps, Real Rem Time: %ss, Real Rem Data: %sMbits \n",
-                        client.getFlClientCID(), bitToMbit(artAssignedRates.get(client)), bitToMbit(assignedRate), remainingTime, bitToMbit(dataRemain)));
+                phase2Logger.append(String.format("\t - Client %s: Art Rate: %sMbps, Real Rate:%sMbps, Real Rem Time: %ss, Real Rem Data: %sMbits\n",
+                        client.getFlClientCID(), bitToMbit(assumedRates.get(client)), bitToMbit(assignedRate), remainingTime, bitToMbit(dataRemain) ));
             }
-            phase2Logger.append(String.format("\t** Completed %s/%s Clients**\n", completedClients.size(), TOTAL_CLIENTS));
+            phase2Logger.append(String.format("\t** Completed %s/%s Clients**\n", completedClients.size(), ClientInformationDatabase.INSTANCE.getTotalFLClients()));
             phase2Logger.append("\t** Finishing Internal Round**\n");
-            Util.log("greedy", phase2Logger.toString());
+            Util.log("greedy" + this.direction, phase2Logger.toString());
+            Util.log("overhead", String.format("controller,phase2,%s", System.currentTimeMillis() - tik));
         } catch (Exception e) {
-            Util.log("greedy", e.getMessage() + "..." + Arrays.toString(e.getStackTrace()));
+            Util.log("greedy" + this.direction, "ERROR: " + e.getMessage() + "..." + Arrays.toString(e.getStackTrace()));
         }
-    }
-
-    MyPath getStaticPaths(FLHost flHost) {
-        PathInformationDatabase instance = PathInformationDatabase.INSTANCE;
-        switch (flHost.getFlClientCID()) {
-            case "0":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1008 -> FL#0", "S2C");
-            case "1":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1009 -> FL#1", "S2C");
-            case "2":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1003 -> 1004 -> 1002 -> FL#2", "S2C");
-            case "3":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1003 -> 1004 -> FL#3", "S2C");
-            case "4":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1008 -> 1006 -> 1005 -> FL#4", "S2C");
-            case "5":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1007 -> 1006 -> FL#5", "S2C");
-            case "6":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1009 -> 1000 -> FL#6", "S2C");
-            case "7":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1000 -> 1004 -> 1003 -> 1007 -> FL#7", "S2C");
-            case "8":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1008 -> FL#8", "S2C");
-            case "9":
-                return instance.getPathFromString(flHost, "FLServer -> 1001 -> 1000 -> 1009 -> FL#9", "S2C");
-        }
-        return null;
     }
 
     static class PathScore {

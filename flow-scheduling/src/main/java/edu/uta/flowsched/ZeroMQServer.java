@@ -19,7 +19,6 @@ public class ZeroMQServer {
     private static final ClientInformationDatabase clientInformationDatabase = ClientInformationDatabase.INSTANCE;
     private static final PathInformationDatabase pathInformationDatabase = PathInformationDatabase.INSTANCE;
 
-    private static int TOTAL_CLIENTS = 10;
     private static int clientMessages = 0;
 
     ZMQ.Socket socket;
@@ -29,10 +28,10 @@ public class ZeroMQServer {
         context = ZMQ.context(1);
 
         socket = context.socket(ZMQ.PULL);
+        String ip = System.getenv("ONOS_IP");
+        socket.bind(String.format("tcp://%s:5555", ip));
 
-        socket.bind("tcp://11.66.33.46:5555");
-
-        Util.log("general", "Waiting for messages...");
+//        Util.log("general", "Waiting for messages...");
         executorService.submit(this::listener);
     }
 
@@ -50,7 +49,7 @@ public class ZeroMQServer {
             long clientTimeMS = jsonObject.getLong("time_ms");
             long serverTimeMS = System.currentTimeMillis();
             Object jsonMessage = jsonObject.get("message");
-            Util.log("overhead.csv", String.format("zmq,%s,%s", messageType, serverTimeMS - clientTimeMS));
+            Util.log("overhead", String.format("zmq,%s,%s", messageType, serverTimeMS - clientTimeMS));
             if (messageType == MessageType.UPDATE_DIRECTORY) {
                 JSONObject clientInfo = (JSONObject) jsonMessage;
                 updateDirectory(clientInfo);
@@ -58,13 +57,12 @@ public class ZeroMQServer {
                 JSONArray clients = (JSONArray) jsonMessage;
                 handleServerToClientsPaths(clients);
             } else if (messageType == MessageType.CLIENT_TO_SERVER) {
-                if (clientMessages == 0){
+                if (clientMessages == 0) {
                     GreedyFlowScheduler.C2S_INSTANCE.startScheduling();
                 }
-
                 String clientCID = jsonObject.getString("sender_id");
                 handleClientToServerPath(clientCID, clientTimeMS);
-                if (++clientMessages == TOTAL_CLIENTS) {
+                if (++clientMessages == ClientInformationDatabase.INSTANCE.getTotalFLClients()) {
                     clientMessages = 0;
                 }
             }
@@ -83,8 +81,7 @@ public class ZeroMQServer {
         HostId hostId = HostId.hostId(macAddress);
         PathInformationDatabase.INSTANCE.setPathsToClient(hostId);
         PathInformationDatabase.INSTANCE.setPathsToServer(hostId);
-        Util.log("overhead.csv", String.format("controller,update_directory,%s", System.currentTimeMillis() - tik));
-//        Util.log("general", String.format("Took %s ms to handle Update Directory for Client %s", , flClientCID));
+        Util.log("overhead", String.format("controller,update_directory,%s", System.currentTimeMillis() - tik));
     }
 
     private void handleClientToServerPath(String clientID, long time) {
@@ -98,9 +95,6 @@ public class ZeroMQServer {
             hashSet.add(clients.getString(i));
         }
         List<FLHost> hosts = clientInformationDatabase.getHostsByFLIDs(hashSet);
-        StringBuilder sb = new StringBuilder();
-        hosts.forEach(host -> sb.append(host.getFlClientCID()).append(","));
-        Util.log("general,greedy,debug_paths", String.format("** Server to Client Handing For: %s **", sb));
         hosts = sortBasedOnMaxRate(hosts);
         for (FLHost host : hosts) {
             GreedyFlowScheduler.S2C_INSTANCE.addClient(host, pathInformationDatabase.getPathsToClient(host));
@@ -113,19 +107,19 @@ public class ZeroMQServer {
                 getDeviceEgressLinks(flHost.location().deviceId()).size())).collect(Collectors.toList());
     }
 
-    private List<FLHost> sortBasedOnMaxRate(List<FLHost> hosts){
+    private List<FLHost> sortBasedOnMaxRate(List<FLHost> hosts) {
         Map<FLHost, Double> rates = new HashMap<>();
         for (FLHost host : hosts) {
             Set<MyPath> paths = PathInformationDatabase.INSTANCE.getPathsToClient(host);
-//            TotalLoadComparator comparator = new TotalLoadComparator(paths, 0.6, 0.2, 0.1, 0.1);
+            TotalLoadComparator comparator = new TotalLoadComparator(paths, 0, 0.7, 0.3, 0.0);
             double score = paths.stream()
-                    .mapToDouble(path ->path.getBottleneckFreeCap() / 1e6)
-                    .max()
+                    .mapToDouble(path -> comparator.computeScore(path)[0])
+                    .min()
                     .orElse(0);
             rates.put(host, score);
         }
 //        StringBuilder debug = new StringBuilder("\t******** Sorted Clients ********\n");
-        List<FLHost> ordered = rates.entrySet().stream().sorted(Collections.reverseOrder(Map.Entry.comparingByValue()))
+        List<FLHost> ordered = rates.entrySet().stream().sorted(Map.Entry.comparingByValue())
 //                .peek(entry-> debug.append(String.format("\t\tHost: %s Score:%s\n", entry.getKey().getFlClientCID(), entry.getValue())))
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());

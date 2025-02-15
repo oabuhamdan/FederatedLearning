@@ -38,7 +38,7 @@ public class LinkInformationDatabase {
 
     protected void activate() {
         linkThroughputWatcher = new LinkThroughputWatcher();
-        internalFlowRuleListener = new InternalFlowRuleListener();
+//        internalFlowRuleListener = new InternalFlowRuleListener();
         executor = Executors.newSingleThreadScheduledExecutor();
 
         Services.deviceService.addListener(linkThroughputWatcher);
@@ -97,18 +97,22 @@ public class LinkInformationDatabase {
     private class LinkThroughputWatcher implements DeviceListener {
         @Override
         public void event(DeviceEvent event) {
-            DeviceEvent.Type type = event.type();
-            DeviceId deviceId = event.subject().id();
-            if (type == PORT_STATS_UPDATED) {
-                List<PortStatistics> portStatisticsList = Services.deviceService.getPortDeltaStatistics(deviceId);
-                portStatisticsList.forEach(portStatistics -> {
-                    long receivedRate = (portStatistics.bytesReceived() * 8) / Util.POLL_FREQ;
-                    long sentRate = (portStatistics.bytesSent() * 8) / Util.POLL_FREQ;
-                    Set<Link> ingressLinks = Services.linkService.getIngressLinks(new ConnectPoint(deviceId, portStatistics.portNumber()));
-                    updateDeviceLinksUtilization(ingressLinks, receivedRate);
-                    Set<Link> egressLinks = Services.linkService.getEgressLinks(new ConnectPoint(deviceId, portStatistics.portNumber()));
-                    updateDeviceLinksUtilization(egressLinks, sentRate);
-                });
+            try {
+                DeviceEvent.Type type = event.type();
+                DeviceId deviceId = event.subject().id();
+                if (type == PORT_STATS_UPDATED) {
+                    List<PortStatistics> portStatisticsList = Services.deviceService.getPortDeltaStatistics(deviceId);
+                    portStatisticsList.forEach(portStatistics -> {
+                        long receivedRate = (portStatistics.bytesReceived() * 8) / Util.POLL_FREQ;
+                        long sentRate = (portStatistics.bytesSent() * 8) / Util.POLL_FREQ;
+                        Set<Link> ingressLinks = Services.linkService.getIngressLinks(new ConnectPoint(deviceId, portStatistics.portNumber()));
+                        updateDeviceLinksUtilization(ingressLinks, receivedRate);
+                        Set<Link> egressLinks = Services.linkService.getEgressLinks(new ConnectPoint(deviceId, portStatistics.portNumber()));
+                        updateDeviceLinksUtilization(egressLinks, sentRate);
+                    });
+                }
+            }catch (Exception e){
+                Util.log("general", "Error inside LinkThroughputWatcher..." + Arrays.toString(e.getStackTrace()));
             }
         }
     }

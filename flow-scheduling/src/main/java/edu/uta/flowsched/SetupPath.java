@@ -21,7 +21,7 @@ public class SetupPath {
             Util.log("general", String.format("Client %s has no paths yet", flHost.getFlClientCID()));
             return;
         }
-        PathRulesInstaller.INSTANCE.installPathRules(flHost, clientToServerPath.get());
+//        PathRulesInstaller.INSTANCE.installPathRules(flHost, clientToServerPath.get());
 
 //        long capacityModelWillOccupy = getCapacityModelWillOccupy(clientToServerPath.get());
 //        clientToServerPath.get().reserveCapacity(flHost);
@@ -41,7 +41,7 @@ public class SetupPath {
                     Util.log("general", String.format("Client %s has no paths yet", flHost.getFlClientCID()));
                     continue;
                 }
-                PathRulesInstaller.INSTANCE.installPathRules(flHost, serverToClientPath.get());
+//                PathRulesInstaller.INSTANCE.installPathRules(flHost, serverToClientPath.get());
 
 //                long capacityModelWillOccupy = getCapacityModelWillOccupy(serverToClientPath.get());
 //                serverToClientPath.get().reserveCapacity(flHost);
