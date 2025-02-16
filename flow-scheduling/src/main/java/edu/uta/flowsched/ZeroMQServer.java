@@ -30,8 +30,6 @@ public class ZeroMQServer {
         socket = context.socket(ZMQ.PULL);
         String ip = System.getenv("ONOS_IP");
         socket.bind(String.format("tcp://%s:5555", ip));
-
-//        Util.log("general", "Waiting for messages...");
         executorService.submit(this::listener);
     }
 
