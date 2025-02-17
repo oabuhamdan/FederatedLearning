@@ -14,6 +14,7 @@ class ExperimentRunner:
         self.learning_rate = kwargs.get('learning_rate', 0.001)
         self.fl_server = kwargs.get('fl_server', None)
         self.fl_clients = kwargs.get('fl_clients', [])
+        self.onos_server = kwargs.get('onos_server', 'localhost')
         self.zmq = kwargs.get('zmq', False)
 
     def __str__(self):
@@ -67,17 +68,18 @@ class ExperimentRunner:
     def start_experiment(self):
         serv_inf = self.fl_server.defaultIntf()
         server_addr = str(self.fl_server.params['ip'])
-
+        self.fl_server.cmd(f"ip route add {self.onos_server}/32 via 172.17.0.1")
         self.fl_server.cmd(f"./network_stats.sh {serv_inf} 5 {self.log_path}/server_network.csv > /dev/null 2>&1 &")
         self.fl_server.sendCmd(
             f"source venv/bin/activate && python FlowerServer.py --dataset {self.dataset}"
-            f" --num-clients {len(self.fl_clients)} --rounds {self.rounds} --server-address {server_addr}"
-            f" --epochs {self.epochs} --batch-size {self.batch_size} --log-path {self.log_path} {'--zmq' if self.zmq else ''}"
+            f" --num-clients {len(self.fl_clients)} --rounds {self.rounds} --fl-server {server_addr}"
+            f" --onos-server {self.onos_server} --epochs {self.epochs} --batch-size {self.batch_size}"
+            f" --log-path {self.log_path} {'--zmq' if self.zmq else ''}"
         )
         for i, sta in enumerate(self.fl_clients):
-            cmd = (f"python FlowerClient.py --cid {i} --dataset {self.dataset} --log-path {self.log_path} "
-                   f"--server-address {server_addr} {'--zmq' if self.zmq else ''}")
-            sta.cmd(f"source venv/bin/activate && {cmd} > /dev/null 2>&1 &")
+            cmd = (f"python FlowerClient.py --cid {i + 1} --dataset {self.dataset} --log-path {self.log_path}"
+                   f" --fl-server {server_addr} {'--zmq' if self.zmq else ''}")
+            sta.cmd(f"source venv/bin/activate && {cmd} > /dev/null  2>&1 &")
             inf = sta.defaultIntf()
             sta.cmd(f"./network_stats.sh {inf} 5 {self.log_path}/flclient{i}_network.csv > /dev/null 2>&1 &")
         print(f"Discarded: {self.fl_server.read(1024)}")  #
