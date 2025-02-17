@@ -1,11 +1,9 @@
 import json
-
+from collections import Counter
 from urllib import request
 
-import yaml
 from mininet.node import Docker
 from mininet.topo import Topo
-from collections import Counter
 
 
 class MyTopo2(Topo):
@@ -26,13 +24,14 @@ class MyTopo2(Topo):
                 "/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/logs:/app/logs",
                 "/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/data:/app/data",
             ],
-            "dimage": "fl_mininet_image:latest",
             "cls": Docker,
             "sysctls": {"net.ipv4.tcp_congestion_control": "cubic"}
         }
-        self.fl_host_limits = dict(mem_limit="1g", memswap_limit="2g", cpu_period=100000, cpu_quota=int(0.75 * 100000))
-        self.bg_host_limits = dict(cpu_period=100000, cpu_quota=int(0.25 * 100000), mem_limit="256m",
-                                   memswap_limit="1gb")
+        self.fl_host_limits = dict(mem_limit="1g", memswap_limit="2g", cpu_period=100000, cpu_quota=int(0.75 * 100000),
+                                   dimage="fl_mininet_image:latest")
+        self.bg_host_limits = dict(mem_limit="256m", memswap_limit="1g", cpu_period=100000,
+                                   cpu_quota=int(0.15 * 100000),
+                                   dimage="bg_mininet_image:latest")
 
         self.build(config_loaded=True)
 
@@ -42,12 +41,14 @@ class MyTopo2(Topo):
 
         self.create_nodes(self.nodes_data)
         self.create_links(self.nodes_data, self.links_data)
-        fl_server = self.addHost('flserver', ip=f"10.0.0.100", mac="00:00:00:00:00:AA", **self.containernet_kwargs)
-        node_max_degree = max(self.nodes_data.values(), key=lambda x: x['degree'])['node']
+        fl_server = self.addHost('flserver', ip=f"10.0.0.250", mac="00:00:00:00:00:FA",
+                                 dimage="fl_mininet_image:latest", **self.containernet_kwargs)
+        nodes_sorted_by_degree = sorted(self.nodes_data.values(), key=lambda x: x["degree"])
+        node_max_degree = nodes_sorted_by_degree[-1]["node"]
         self.addLink(node_max_degree, fl_server)
 
         self.create_bg_hosts()
-        self.fl_clients = self.create_fl_hosts()
+        self.fl_clients = self.create_fl_hosts(nodes_sorted_by_degree[:-int(self.topo_size * 0.2)])  # exclude
 
     def create_links(self, nodes, links_data):
         for link in links_data:
@@ -60,19 +61,17 @@ class MyTopo2(Topo):
 
     def create_bg_hosts(self):
         for i, node in self.nodes_data.items():
-            node["bgclient"] = self.addHost(f'bgclient{i}', ip=f"10.0.0.{150 + i}", mac=self.int_to_mac(150 + i),
+            node["bgclient"] = self.addHost(f'bgclient{i}', ip=f"10.0.1.{i + 1}", mac=self.int_to_mac(i + 257),
                                             **self.containernet_kwargs, **self.bg_host_limits)
 
         for node in self.nodes_data.values():
             self.addLink(node["bgclient"], node['node'])
 
-    def create_fl_hosts(self):
+    def create_fl_hosts(self, nodes_sorted_by_degree):
         fl_hosts = [
-            self.addHost(f'flclient{i}', ip=f"10.0.0.{50 + i}", mac=self.int_to_mac(50 + i),
+            self.addHost(f'flclient{i + 1}', ip=f"10.0.0.{i + 1}", mac=self.int_to_mac(i + 1),
                          **self.containernet_kwargs, **self.fl_host_limits) for i in range(self.fl_clients_number)
         ]
-
-        nodes_sorted_by_degree = sorted(self.nodes_data.values(), key=lambda x: x["degree"])[:-2]
         for i, host in enumerate(fl_hosts):
             self.addLink(host, nodes_sorted_by_degree[i % len(nodes_sorted_by_degree)]['node'])
 
