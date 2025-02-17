@@ -23,9 +23,9 @@ class ZMQHandler:
         SERVER_TO_CLIENTS = 2
         CLIENT_TO_SERVER = 3
 
-    def __init__(self, my_server_address, onos_server_address):
-        self.my_server_address = my_server_address
-        self.onos_server_address = onos_server_address
+    def __init__(self, fl_server, onos_server):
+        self.fl_server_address = fl_server
+        self.onos_server_address = onos_server
         self.snd_socket = None
         self.recv_socket = None
 
@@ -36,7 +36,7 @@ class ZMQHandler:
     def init_zmq(self):
         context = zmq.Context()
         self.recv_socket = context.socket(zmq.PULL)
-        self.recv_socket.bind(f"tcp://{self.my_server_address}:5555")
+        self.recv_socket.bind(f"tcp://{self.fl_server_address}:5555")
         self.snd_socket = context.socket(zmq.PUSH)
         self.snd_socket.connect(f"tcp://{self.onos_server_address}:5555")
 
@@ -61,7 +61,7 @@ def fit_client(
         fit_res = client.fit(ins, timeout=timeout, group_id=group_id)
     except Exception as exc:
         tb_str = traceback.format_exc()
-        log(ERROR, "Failed to fit client %s to server %s", exc.args, tb_str)
+        log(ERROR, "Failed to fit client %s to server. Traceback: %s", client.cid, tb_str)
     client_round_finish_time = timeit.default_timer()
     fit_res.metrics["client_round_start_time"] = client_round_start_time
     fit_res.metrics["client_round_finish_time"] = client_round_finish_time
@@ -96,13 +96,13 @@ def fit_clients(
 
 
 class MyServer(Server):
-    def __init__(self, *, client_manager, strategy, zmq, my_server_address, onos_server_address, log_path):
+    def __init__(self, *, client_manager, strategy, use_zmq, fl_server, onos_server, log_path):
         super().__init__(client_manager=client_manager, strategy=strategy)
         self.client_wise_log = csv.writer(open(f'{log_path}/fl_task_client_times.csv', 'w'), dialect='unix')
         self.overall_log = csv.writer(open(f'{log_path}/fl_task_overall_times.csv', 'w'), dialect='unix')
-        self.zmq = zmq
-        if self.zmq:
-            self.zmq_handler = ZMQHandler(my_server_address, onos_server_address)
+        self.use_zmq = use_zmq
+        if self.use_zmq:
+            self.zmq_handler = ZMQHandler(fl_server, onos_server)
             client_manager.set_zmq_handler(self.zmq_handler)
 
     def fit_round(
@@ -129,7 +129,7 @@ class MyServer(Server):
         )
 
         # Collect clients_info
-        if self.zmq:
+        if self.use_zmq:
             round_clients = sorted([client_proxy.cid for client_proxy, _ in client_instructions])
             self.zmq_handler.send_data_to_server(ZMQHandler.MessageType.SERVER_TO_CLIENTS, round_clients)
             time.sleep(0.1)
