@@ -1,7 +1,4 @@
 import os
-import random
-import time
-
 
 class BGTrafficGenerator:
     def __init__(self, bg_hosts, topo_nodes_info, topo_links_info, log_dir_name):
@@ -10,42 +7,15 @@ class BGTrafficGenerator:
         self.log_path = f"logs/{log_dir_name}/iperf_logs"
         self.bg_hosts = bg_hosts
 
-    def generate_dynamic_flows(self, src, dst, avg_throughput_mbps):
-        max_flows = 10  # Maximum number of concurrent flows
-        min_flows = 3  # Minimum number of concurrent flows
-        active_flows = []  # List to track active flow PIDs
-        current_total_rate = 0
-        flow_bandwidth = avg_throughput_mbps
-        with open(f"{self.log_path}/traffic_logs.txt", "w") as traffic_log:
-            while True:
-                num_active_flows = len(active_flows)
-                # Randomly decide to increase or decrease the number of flows
-                if num_active_flows < max_flows and random.random() <= 0.5:
-                    # Start a new flow with 50% probability if under max_flows
-                    port = str(time.time_ns())[-5:]
-                    dst.cmd(f'iperf3 -s --daemon --one-off -p {port} > /dev/null &')
-                    src.cmd(f'iperf3 -c {dst.IP()} -t {2000} -b {flow_bandwidth}M -p {port} '
-                            f'--logfile {self.log_path}/{src.name}_{dst.name}_{port}_logs.txt > /dev/null &')
-
-                elif num_active_flows > min_flows and random.random() >= 0.5:
-                    # Stop a random flow with 50% probability if over min_flows
-                    pid_to_stop = random.choice(active_flows)
-                    traffic_log.write(f"Stopping flow with PID {pid_to_stop} (Total flows: {len(active_flows) - 1})"
-                                      f"(Total Rate: {current_total_rate})")
-                    src.cmd(f'kill -9 {pid_to_stop}')  # Kill the process by PID
-                    active_flows.remove(pid_to_stop)
-
-                flow_bandwidth = avg_throughput_mbps // (num_active_flows + 1)
-                time.sleep(2)
-
     def gen_traffic(self):
         port = 12345
         with open(f"{self.log_path}/traffic_logs.txt", "w") as traffic_log:
             def start_flow(src, dst, rate):
                 nonlocal port
-                dst.cmd(f"./start_iperf.sh server {port} '{self.log_path}/{src.name}_{dst.name}_{port}_logs.txt'")
+                log_file = f'{self.log_path}/{src.name}_{dst.name}_{port}_logs.txt'
+                dst.cmd(f"./start_iperf.sh server {port} {log_file}")
                 traffic_log.write(f"From {src.IP()} to {dst.IP()}" f" with rate {rate}\n")
-                src.cmd(f"./start_iperf.sh client {port} {dst.IP()} {rate} '{self.log_path}/{src.name}_{dst.name}_{port}_logs.txt'")
+                src.cmd(f"./start_iperf.sh client {port} {dst.IP()} {rate} {log_file}")
                 port += 1
 
             for link in self.topo_links_info:
