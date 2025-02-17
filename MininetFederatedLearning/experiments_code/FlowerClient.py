@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import os
 import socket
 import time
 import timeit
@@ -137,10 +138,9 @@ def get_dataset():
 def main():
     # Download dataset and partition it
     trainsets = get_dataset()
-    logging.info(args.server_address)
     # Start Flower client setting its associated data partition
     fl.client.start_client(
-        server_address=args.server_address + ":8080",
+        server_address=args.fl_server + ":8080",
         client=FlowerClient(
             trainset=trainsets, cid=args.cid
         ).to_client(),
@@ -151,15 +151,17 @@ def init_zmq():
     global zeromq_socket, sender_id
     context = zmq.Context()
     zeromq_socket = context.socket(zmq.PUSH)
-    zeromq_socket.connect(f"tcp://{args.server_address}:5555")
+    zeromq_socket.connect(f"tcp://{args.fl_server}:5555")
     sender_id = f"{args.cid}"
 
 
 if __name__ == "__main__":
+    # os.environ["GRPC_VERBOSITY"] = "debug"
+    # os.environ["GRPC_TRACE"] = "connectivity_state,server_channel,client_channel,subchannel"
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, default="cifar10")
     parser.add_argument("-c", "--cid", type=int, default=0)
-    parser.add_argument("--server-address", type=str, default="localhost")
+    parser.add_argument("--fl-server", type=str, default="localhost")
     parser.add_argument("--log-path", type=str, default="logs/manual_testing")
     parser.add_argument("--zmq", action='store_true')
     args = parser.parse_args()
@@ -170,6 +172,7 @@ if __name__ == "__main__":
         datefmt='%H:%M:%S',
     )
     if args.zmq:
+        zeromq_socket, sender_id = None, None
         init_zmq()
 
     main()

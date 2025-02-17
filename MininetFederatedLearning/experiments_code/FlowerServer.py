@@ -9,7 +9,6 @@ from flwr.common import ndarrays_to_parameters
 from torch.utils.data import DataLoader
 from torchvision.models import mobilenet_v3_large
 from torchvision.transforms import Compose, ToTensor, Normalize
-
 from my_server_class import MyServer, MySimpleClientManager
 
 
@@ -98,11 +97,11 @@ def main():
     )
 
     # Start Flower server
-    server = MyServer(strategy=strategy, client_manager=MySimpleClientManager(), zmq=args.zmq,
-                      my_server_address=args.server_address, onos_server_address="11.66.33.46",
-                      log_path=args.log_path)
+    server = MyServer(strategy=strategy, client_manager=MySimpleClientManager(), use_zmq=args.zmq,
+                      fl_server=args.fl_server, onos_server=args.onos_server, log_path=args.log_path)
+
     fl.server.start_server(
-        server_address=args.server_address + ":8080",
+        server_address=args.fl_server + ":8080",
         config=fl.server.ServerConfig(num_rounds=args.rounds),
         strategy=strategy,
         server=server,
@@ -111,7 +110,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # os.environ["GRPC_VERBOSITY"] = "info"
+    # os.environ["GRPC_VERBOSITY"] = "debug"
     # os.environ["GRPC_TRACE"] = "connectivity_state,server_channel,client_channel,subchannel"
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, default="cifar10")
@@ -119,7 +118,8 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--rounds", type=int, default=2)
     parser.add_argument("-c", "--num-clients", type=int, default=1)
     parser.add_argument("-b", "--batch-size", type=int, default=16)
-    parser.add_argument("--server-address", type=str, default="localhost")
+    parser.add_argument("--fl-server", type=str, default="localhost")
+    parser.add_argument("--onos-server", type=str, default="localhost")
     parser.add_argument("--log-path", type=str, default="logs/manual_testing")
     parser.add_argument("--zmq", action='store_true')
     args = parser.parse_args()
