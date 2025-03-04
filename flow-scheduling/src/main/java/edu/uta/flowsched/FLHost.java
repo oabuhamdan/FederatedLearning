@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static edu.uta.flowsched.Util.bitToMbit;
 
@@ -77,19 +78,19 @@ class FLHost extends DefaultHost {
     }
 
     class NetworkStats {
-        private final LinkedList<Long> lastPositiveTXRate;
-        private final LinkedList<Long> lastPositiveRXRate;
-        private final LinkedList<Long> lastTXRate;
-        private final LinkedList<Long> lastRXRate;
+        private final ConcurrentLinkedQueue<Long> lastPositiveTXRate;
+        private final ConcurrentLinkedQueue<Long> lastPositiveRXRate;
+        private final ConcurrentLinkedQueue<Long> lastTXRate;
+        private final ConcurrentLinkedQueue<Long> lastRXRate;
 
         private final ConcurrentHashMap<Integer, Long> roundSentData;
         private final ConcurrentHashMap<Integer, Long> roundReceivedData;
 
         public NetworkStats() {
-            this.lastTXRate = new LinkedList<>();
-            this.lastRXRate = new LinkedList<>();
-            this.lastPositiveTXRate = new LinkedList<>();
-            this.lastPositiveRXRate = new LinkedList<>();
+            this.lastTXRate = new ConcurrentLinkedQueue<>();
+            this.lastRXRate = new ConcurrentLinkedQueue<>();
+            this.lastPositiveTXRate = new ConcurrentLinkedQueue<>();
+            this.lastPositiveRXRate = new ConcurrentLinkedQueue<>();
             this.roundSentData = new ConcurrentHashMap<>();
             this.roundReceivedData = new ConcurrentHashMap<>();
         }
@@ -145,30 +146,30 @@ class FLHost extends DefaultHost {
         }
 
         public void setLastPositiveTXRate(long lastPositiveTXRate) {
-            this.lastPositiveTXRate.addLast(lastPositiveTXRate);
+            this.lastPositiveTXRate.add(lastPositiveTXRate);
             // keep it limited to 0
             if (this.lastPositiveTXRate.size() > 3)
-                this.lastPositiveTXRate.removeFirst();
+                this.lastPositiveTXRate.poll();
         }
 
         public void setLastPositiveRXRate(long lastPositiveRXRate) {
-            this.lastPositiveRXRate.addLast(lastPositiveRXRate);
+            this.lastPositiveRXRate.add(lastPositiveRXRate);
             // keep it limited to 0
             if (this.lastPositiveRXRate.size() > 5)
-                this.lastPositiveRXRate.removeFirst();
+                this.lastPositiveRXRate.poll();
         }
 
         public void setLastTXRate(long lastTXRate) {
             this.lastTXRate.add(lastTXRate);
             if (this.lastTXRate.size() > 5)
-                this.lastTXRate.removeFirst();
+                this.lastTXRate.poll();
 
         }
 
         public void setLastRXRate(long lastRXRate) {
             this.lastRXRate.add(lastRXRate);
             if (this.lastRXRate.size() > 3)
-                this.lastRXRate.removeFirst();
+                this.lastRXRate.poll();
         }
 
         public long getRoundSentData(int round) {

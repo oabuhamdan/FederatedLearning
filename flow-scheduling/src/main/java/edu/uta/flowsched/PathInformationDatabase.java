@@ -73,17 +73,6 @@ public class PathInformationDatabase {
         PathRulesInstaller.INSTANCE.installPathRules(ClientInformationDatabase.INSTANCE.getHostByHostID(hostId).get(), (Path) paths.toArray()[0], true);
         SERVER_TO_CLIENT_PATHS.put(hostId, paths);
     }
-
-    public MyPath getPathFromString(FLHost host, String path, String direction){
-        if (direction.equals("S2C")){
-            return getPathsToClient(host).stream().filter(p -> p.format().equals(path)).findFirst().orElse(null);
-        }
-        else if (direction.equals("C2S")){
-            return getPathsToServer(host).stream().filter(p -> p.format().equals(path)).findFirst().orElse(null);
-        }
-        return null;
-    }
-
     void printAll() {
         Util.log("paths", "***************Server to Clients Paths***************");
         for (FLHost host : ClientInformationDatabase.INSTANCE.getFLHosts()) {
@@ -97,11 +86,5 @@ public class PathInformationDatabase {
             getPathsToServer(host).forEach(myPath -> stringBuilder.append(myPath.format()).append("\n"));
             Util.log("paths", stringBuilder.toString());
         }
-    }
-
-    public void updateBottleneckPath() {
-//        Util.log("general", "Updating Bottleneck Links");
-//        executorService.submit(() -> CLIENT_TO_SERVER_PATHS.values().forEach(myPaths -> myPaths.forEach(MyPath::updateBottleneckLink)));
-//        executorService.submit(() -> SERVER_TO_CLIENT_PATHS.values().forEach(myPaths -> myPaths.forEach(MyPath::updateBottleneckLink)));
     }
 }

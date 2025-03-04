@@ -35,10 +35,6 @@ public class Util {
     }
 
 
-    public static long MbpsToBps(Number num) {
-        return DataRateUnit.MBPS.toBitsPerSecond(num.longValue());
-    }
-
     public static long bitToMbit(Number num) {
         return num.longValue() / 1_000_000;
     }
@@ -52,19 +48,6 @@ public class Util {
         String src = link.src().elementId().toString().substring(15);
         String dst = link.dst().elementId().toString().substring(15);
         return String.format(LINK_STRING_FORMAT, src, dst);
-    }
-
-
-    public static int ageInSeconds(long t) {
-        long ageInMillis = System.currentTimeMillis() - t;
-        return (ageInMillis > Integer.MAX_VALUE * 1000L) ? Integer.MAX_VALUE : (int) (ageInMillis / 1000);
-    }
-
-    public static double safeDivision(Number num1, Number num2) {
-        if (num2.doubleValue() == 0) {
-            num2 = 1;
-        }
-        return num1.doubleValue() / num2.doubleValue();
     }
 
     static void log(String loggerNames, String message) {

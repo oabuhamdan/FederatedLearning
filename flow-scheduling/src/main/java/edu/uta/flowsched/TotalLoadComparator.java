@@ -5,7 +5,6 @@ import java.util.*;
 import static edu.uta.flowsched.Util.bitToMbit;
 
 public class TotalLoadComparator implements Comparator<MyPath> {
-    private final Collection<MyPath> paths;
     private double maxFairShare;
     private double maxFreeCap;
     private double minFairShare;
@@ -24,7 +23,6 @@ public class TotalLoadComparator implements Comparator<MyPath> {
     private final Map<MyPath, Double> activeFlows;
 
     public TotalLoadComparator(Collection<MyPath> paths, double weightFairShare, double weightFreeCap, double weightHopCount, double weightActiveFlows) {
-        this.paths = paths;
         this.projectedFairShare = new HashMap<>();
         this.pathFreeCapacity = new HashMap<>();
         this.activeFlows = new HashMap<>();

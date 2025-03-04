@@ -58,7 +58,7 @@ public class ZeroMQServer {
                 if (clientMessages == 0) {
                     GreedyFlowScheduler.C2S_INSTANCE.startScheduling();
                 }
-                String clientCID = jsonObject.getString("sender_id");
+                String clientCID = String.valueOf(jsonObject.get("sender_id"));
                 handleClientToServerPath(clientCID, clientTimeMS);
                 if (++clientMessages == ClientInformationDatabase.INSTANCE.getTotalFLClients()) {
                     clientMessages = 0;
@@ -73,7 +73,7 @@ public class ZeroMQServer {
     private void updateDirectory(JSONObject clientInfo) throws JSONException {
         long tik = System.currentTimeMillis();
         MacAddress macAddress = MacAddress.valueOf(clientInfo.getString("mac"));
-        String flClientID = clientInfo.getString("client_id");
+        String flClientID = clientInfo.getString("node_id");
         String flClientCID = clientInfo.getString("client_cid");
         clientInformationDatabase.updateHost(macAddress, flClientID, flClientCID);
         HostId hostId = HostId.hostId(macAddress);
@@ -109,9 +109,9 @@ public class ZeroMQServer {
         Map<FLHost, Double> rates = new HashMap<>();
         for (FLHost host : hosts) {
             Set<MyPath> paths = PathInformationDatabase.INSTANCE.getPathsToClient(host);
-            TotalLoadComparator comparator = new TotalLoadComparator(paths, 0, 0.7, 0.3, 0.0);
+//            TotalLoadComparator comparator = new TotalLoadComparator(paths, 0, 0.7, 0.3, 0.0);
             double score = paths.stream()
-                    .mapToDouble(path -> comparator.computeScore(path)[0])
+                    .mapToDouble(path -> path.getBottleneckFreeCap() / 1e6)
                     .min()
                     .orElse(0);
             rates.put(host, score);

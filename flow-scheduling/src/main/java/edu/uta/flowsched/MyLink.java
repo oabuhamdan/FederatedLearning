@@ -7,15 +7,17 @@ import org.onosproject.net.provider.ProviderId;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 public class MyLink extends DefaultLink implements Serializable {
     private static final ProviderId PID = new ProviderId("flowsched", "edu.uta.flowsched", true);
 
     private final AtomicInteger activeFlows;
     private final long defaultCapacity;
-    private final LinkedList<Long> linkThroughput;
+    private final ConcurrentLinkedQueue<Long> linkThroughput;
     private double delay;
     private final AtomicLong reservedCapacity;
     private final Set<FLHost> C2SHosts;
@@ -24,7 +26,7 @@ public class MyLink extends DefaultLink implements Serializable {
     public MyLink(Link link) {
         super(PID, link.src(), link.dst(), link.type(), link.state(), link.annotations());
         this.defaultCapacity = 95_000_000;
-        this.linkThroughput = new LinkedList<>();
+        this.linkThroughput = new ConcurrentLinkedQueue<>();
         this.delay = 0;
         this.reservedCapacity = new AtomicLong(0);
         this.activeFlows = new AtomicInteger(0);
@@ -53,14 +55,14 @@ public class MyLink extends DefaultLink implements Serializable {
     }
 
     public long getThroughput() {
-        return (long) linkThroughput.stream().mapToLong(Long::longValue).average().orElse(0);
+        return linkThroughput.stream().collect(Collectors.averagingLong(Long::intValue)).longValue();
     }
 
     public void setCurrentThroughput(long currentThroughput) {
-        this.linkThroughput.addLast(currentThroughput);
+        this.linkThroughput.add(currentThroughput);
         // keep it limited to 10
         if (this.linkThroughput.size() > 10)
-            this.linkThroughput.removeFirst();
+            this.linkThroughput.poll();
     }
 
     public double getDelay() {

@@ -32,18 +32,14 @@ public class LinkInformationDatabase {
     public static final LinkInformationDatabase INSTANCE = new LinkInformationDatabase();
     private EventuallyConsistentMap<Link, MyLink> LINK_INFORMATION_MAP;
     private LinkThroughputWatcher linkThroughputWatcher;
-    private InternalFlowRuleListener internalFlowRuleListener;
 
     private ScheduledExecutorService executor;
 
     protected void activate() {
         linkThroughputWatcher = new LinkThroughputWatcher();
-//        internalFlowRuleListener = new InternalFlowRuleListener();
         executor = Executors.newSingleThreadScheduledExecutor();
 
         Services.deviceService.addListener(linkThroughputWatcher);
-//        Services.flowRuleService.addListener(internalFlowRuleListener);
-
         KryoNamespace.Builder mySerializer = KryoNamespace.newBuilder().register(KryoNamespaces.API)
                 .register(Link.class)
                 .register(ConnectPoint.class)
@@ -64,7 +60,6 @@ public class LinkInformationDatabase {
 
     protected void deactivate() {
         Services.deviceService.removeListener(linkThroughputWatcher);
-        Services.flowRuleService.removeListener(internalFlowRuleListener);
         LINK_INFORMATION_MAP.clear();
         executor.shutdownNow();
     }
@@ -111,32 +106,8 @@ public class LinkInformationDatabase {
                         updateDeviceLinksUtilization(egressLinks, sentRate);
                     });
                 }
-            }catch (Exception e){
+            } catch (Exception e) {
                 Util.log("general", "Error inside LinkThroughputWatcher..." + Arrays.toString(e.getStackTrace()));
-            }
-        }
-    }
-
-    void linkInfo() {
-        for (MyLink link : LinkInformationDatabase.INSTANCE.getAllLinkInformation()) {
-            Util.log("link_util.csv", String.format("%s,%s,%s", Util.formatLink(link), link.getEstimatedFreeCapacity(), link.getThroughput()));
-        }
-        Util.log("link_util.csv", ",,");
-    }
-
-    private class InternalFlowRuleListener implements FlowRuleListener {
-        @Override
-        public void event(FlowRuleEvent event) {
-            if (event.type().equals(FlowRuleEvent.Type.RULE_REMOVED)) {
-                FlowRule rule = event.subject();
-                Optional<Instructions.OutputInstruction> outputInstruction = rule.treatment().allInstructions().stream()
-                        .filter(instruction -> instruction.type() == Instruction.Type.OUTPUT)
-                        .map(instruction -> (Instructions.OutputInstruction) instruction)
-                        .findAny();
-                if (outputInstruction.isPresent()) {
-                    Set<Link> links = Services.linkService.getEgressLinks(new ConnectPoint(rule.deviceId(), outputInstruction.get().port()));
-                    links.forEach(link -> getLinkInformation(link).decreaseActiveFlows());
-                }
             }
         }
     }

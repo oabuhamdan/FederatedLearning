@@ -206,8 +206,8 @@ public class GreedyFlowScheduler {
     }
 
     private HashMap<MyPath, Double> scorePaths(Set<MyPath> paths) {
-        TotalLoadComparator comparator = new TotalLoadComparator(paths, 0.6, 0.2, 0.1, 0.1);
-        Function<MyPath, Number> pathScore = path -> comparator.computeScore(path)[0];
+//        TotalLoadComparator comparator = new TotalLoadComparator(paths, 0.6, 0.2, 0.1, 0.1);
+        Function<MyPath, Number> pathScore = path -> path.getBottleneckFreeCap() / 1e6;
         HashMap<MyPath, Double> pathScores = new HashMap<>();
         paths.forEach(path -> pathScores.put(path, pathScore.apply(path).doubleValue()));
 //        debugPaths(pathScores);
@@ -258,7 +258,7 @@ public class GreedyFlowScheduler {
 
         for (FLHost affectedClient : affectedClients) {
             long updatedFairShare = affectedClient.getCurrentPath(this.direction).getCurrentFairShare();
-            int updatedCompletionTime = (int) Math.round(1.0 * dataRemaining.get(affectedClient) / updatedFairShare);
+            int updatedCompletionTime = (int) Math.round(1.0 * dataRemaining.getOrDefault(affectedClient, 0L) / updatedFairShare);
             completionTimes.put(affectedClient, updatedCompletionTime);
             assumedRates.put(affectedClient, updatedFairShare);
         }
@@ -298,7 +298,7 @@ public class GreedyFlowScheduler {
                     needPhase1Processing.add(client);
                 }
                 phase2Logger.append(String.format("\t - Client %s: Art Rate: %sMbps, Real Rate:%sMbps, Real Rem Time: %ss, Real Rem Data: %sMbits\n",
-                        client.getFlClientCID(), bitToMbit(assumedRates.get(client)), bitToMbit(assignedRate), remainingTime, bitToMbit(dataRemain) ));
+                        client.getFlClientCID(), bitToMbit(assumedRates.get(client)), bitToMbit(assignedRate), remainingTime, bitToMbit(dataRemain)));
             }
             phase2Logger.append(String.format("\t** Completed %s/%s Clients**\n", completedClients.size(), ClientInformationDatabase.INSTANCE.getTotalFLClients()));
             phase2Logger.append("\t** Finishing Internal Round**\n");
