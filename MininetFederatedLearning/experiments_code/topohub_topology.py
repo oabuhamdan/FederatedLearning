@@ -21,16 +21,19 @@ class MyTopo2(Topo):
 
         self.containernet_kwargs = {
             "volumes": [
-                "/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/logs:/app/logs",
-                "/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/data:/app/data",
+                "/home/osama/federatedlearning/data:/app/data",
+                "/home/osama/federatedlearning/logs:/app/logs",
+                "/home/osama/federatedlearning/state:/app/state",
+                "/etc/localtime:/etc/localtime:ro",
             ],
             "cls": Docker,
             "sysctls": {"net.ipv4.tcp_congestion_control": "cubic"}
         }
-        self.fl_host_limits = dict(mem_limit="1g", memswap_limit="2g", cpu_period=100000, cpu_quota=int(0.75 * 100000),
-                                   dimage="fl_mininet_image:latest")
+        self.fl_host_limits = dict(mem_limit="1.5g", memswap_limit="3g", cpu_period=100000,
+                                   cpu_quota=int(0.70 * 100000),
+                                   dimage="fl_mininet_image:flwr15")
         self.bg_host_limits = dict(mem_limit="256m", memswap_limit="1g", cpu_period=100000,
-                                   cpu_quota=int(0.15 * 100000),
+                                   cpu_quota=int(0.10 * 100000),
                                    dimage="bg_mininet_image:latest")
 
         self.build(config_loaded=True)
@@ -42,7 +45,7 @@ class MyTopo2(Topo):
         self.create_nodes(self.nodes_data)
         self.create_links(self.nodes_data, self.links_data)
         fl_server = self.addHost('flserver', ip=f"10.0.0.250", mac="00:00:00:00:00:FA",
-                                 dimage="fl_mininet_image:latest", **self.containernet_kwargs)
+                                 dimage="fl_mininet_image:flwr15", **self.containernet_kwargs)
         nodes_sorted_by_degree = sorted(self.nodes_data.values(), key=lambda x: x["degree"])
         node_max_degree = nodes_sorted_by_degree[-1]["node"]
         self.addLink(node_max_degree, fl_server)
@@ -93,8 +96,8 @@ class MyTopo2(Topo):
             my_link["src"] = link["source"]
             my_link["dst"] = link["target"]
 
-            my_link["src-dst"] = int(link["ecmp_fwd"]["deg"] * 0.9)
-            my_link["dst-src"] = int(link["ecmp_bwd"]["deg"] * 0.9)
+            my_link["src-dst"] = int(link["ecmp_fwd"]["deg"] * 0.90)
+            my_link["dst-src"] = int(link["ecmp_bwd"]["deg"] * 0.90)
             my_links.append(my_link)
 
         degree = Counter([link['src'] for link in my_links] + [link['dst'] for link in my_links])

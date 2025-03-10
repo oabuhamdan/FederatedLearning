@@ -1,6 +1,8 @@
 import argparse
 import json
 import time
+import tomli
+import os
 
 from mininet.cli import CLI
 from mininet.log import setLogLevel, info
@@ -14,7 +16,7 @@ from mininet.net import Containernet
 
 
 class MyMininet(Containernet):
-    def __init__(self,  **kwargs):
+    def __init__(self, **kwargs):
         Containernet.__init__(self, **kwargs)
 
     def get_fl_hosts(self):
@@ -44,39 +46,35 @@ class MyMininet(Containernet):
 
 def start():
     controller = RemoteController('c0', ip=args.onos, port=6653)
-    topo_creator = MyTopo2(fl_clients_number=args.clients, topo_size=args.size, variation=args.variation)
+    topo_creator = MyTopo2(fl_clients_number=args.clients, topo_size=args.topo_size, variation=args.topo_variation)
     net1 = MyMininet(topo=topo_creator, switch=OVSSwitch, link=TCLink, controller=controller)
 
     (fl_server, fl_clients), bg_clients = net1.get_fl_hosts(), net1.get_bg_hosts()
 
-    exp_name = f"{args.name}_r{args.rounds}_g{args.size}_v{args.variation}_{time.strftime('%m%d_%H%M%S')}"
+    exp_name = f"{args.name}_r{args.rounds}_g{args.topo_size}_v{args.topo_variation}_{time.strftime('%m%d_%H%M%S')}"
     bg_gen = BGTrafficGenerator(bg_clients, topo_creator.nodes_data, topo_creator.links_data, exp_name)
-    exp_runner = ExperimentRunner(exp_name, fl_server=fl_server, fl_clients=fl_clients, bg_clients=bg_clients,
-                                  rounds=args.rounds, batch_size=32, zmq=args.zmq, onos_server=args.onos)
+    exp_runner = ExperimentRunner(exp_name, fl_server=fl_server, fl_clients=fl_clients,
+                                  num_clients=args.clients, num_rounds=args.rounds, onos_server=args.onos)
+
     with net1:
+        print("Exp Name:", exp_name)
         CLI(net1)
         with exp_runner:
-            with open(f"logs/{exp_runner.exp_name}/exp_info.txt", "w") as exp_info:
-                exp_info.write(json.dumps(str(net1.topo)))
-                exp_info.write("\n")
-                exp_info.write(json.dumps(str(exp_runner)))
             bg_gen.start()
-            info(f'*** Starting {exp_runner.exp_name} - Turn FlowSched Now\n')
-            time.sleep(5)
+            info(f'*** Starting Experiment - Turn FlowSched Now\n')
             exp_runner.start_experiment()
             bg_gen.stop()
-        CLI(net1)
+    os.system("pkill -9 bazel")
 
 
 if __name__ == '__main__':
     setLogLevel('info')
     parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--rounds", type=int, default=10)
-    parser.add_argument("-c", "--clients", type=int, default=10)
-    parser.add_argument("-s", "--size", type=int, default=10)
-    parser.add_argument("-v", "--variation", type=int, default=5)
     parser.add_argument("-n", "--name", type=str, default="test")
     parser.add_argument("-o", "--onos", type=str, default="localhost")
-    parser.add_argument("--zmq", action='store_true')
+    parser.add_argument("-r", "--rounds", type=int, default=10)
+    parser.add_argument("-c", "--clients", type=int, default=5)
+    parser.add_argument("-s", "--topo-size", type=int, default=10)
+    parser.add_argument("-v", "--topo-variation", type=int, default=5)
     args = parser.parse_args()
     start()

@@ -25,7 +25,7 @@ start_client() {
     rate=$3
     log_path=$4
     echo "Starting iperf client to $dst_ip on port $port with rate $rate" >> logs/iperflogs.txt
-    iperf3 -c "$dst_ip" -i 10 -t 4000 -b "$rate"M -p "$port" --connect-timeout 500 >> /dev/null 2>&1 &
+    iperf3 -c "$dst_ip" -i 10 -t 10000 -b "$rate"M -p "$port" --connect-timeout 500 >> /dev/null 2>&1 &
     PID=$!
 
     sleep 0.2

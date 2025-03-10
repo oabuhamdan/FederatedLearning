@@ -23,8 +23,8 @@ RUN apt update && apt install -y \
 WORKDIR /app
 
 # Now copy the rest of the application files
-COPY experiments_code/network_stats.sh .
-COPY experiments_code/start_iperf.sh .
+COPY network_stats.sh .
+COPY start_iperf.sh .
 
 # Set the command to start an interactive shell
 CMD ["/bin/bash"]
