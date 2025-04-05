@@ -1,0 +1,36 @@
+[topology]
+topo-type="gabriel"
+topo-size=15
+topo-variation=7
+clients-number=15
+switch-exclude=0.2
+enable-bg-traffic=false
+
+[topology.links]
+link-bw=100 # in Mbps
+link-delay="2ms"
+link-max-queue-size=1000 # in packet
+
+[bg-traffic]
+rate-std=10
+switch-time-mean=10
+switch-time-std=3
+concurrent-tcp=1
+
+[docker-client]
+mem-limit="1.5g"
+memswap-limit="3g"
+cpu-limit=0.7
+fl-imgname="fl_mininet_image:flwr15"
+bg-imgname="bg_mininet_image:latest"
+data-mount="/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/data" # absolute path
+logs-mount="/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/logs" # absolute path
+
+[sdn-controller]
+enable=true
+ip="11.66.33.46"
+port=6653
+
+[other]
+name="plainfc_1"
+logs-path="logs/new_exp" # relative path

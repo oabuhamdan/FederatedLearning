@@ -4,16 +4,13 @@ import shutil
 
 
 class ExperimentRunner:
-    def __init__(self, exp_name, **kwargs):
-        self.exp_name = exp_name
-        self.fl_server = kwargs.get('fl_server', None)
-        self.fl_clients = kwargs.get('fl_clients', [])
-        self.onos_server = kwargs.get('onos_server', 'localhost')
-        self.num_clients = kwargs.get('num_clients', 10)
-        self.num_rounds = kwargs.get('num_rounds', 10)
+    def __init__(self, fl_server, fl_clients, onos_server, logs_path):
+        self.fl_server = fl_server
+        self.fl_clients = fl_clients
+        self.onos_server = onos_server
+        self.log_path = logs_path
 
     def __enter__(self):
-        self.log_path = f"logs/{self.exp_name}/"
         os.makedirs(self.log_path, exist_ok=True)
         with open(f"{self.log_path}/exp_info.txt", "w") as exp_info:
             exp_info.write(json.dumps(self.__str__()))
@@ -21,13 +18,13 @@ class ExperimentRunner:
 
     def __exit__(self, exc_type, exc_value, traceback):
         if os.path.isdir("/home/osama/flow_sched_logs/"):
-            shutil.move("/home/osama/flow_sched_logs/", f"logs/{self.exp_name}/")
+            shutil.move("/home/osama/flow_sched_logs/", self.log_path)
         self.stop_experiment()
         if exc_type:
             print(f"Exception type: {exc_type}")
             print(f"Exception value: {exc_value}")
             print(f"Traceback: {traceback}")
-            shutil.rmtree(f"logs/{self.exp_name}/")
+            shutil.rmtree(self.log_path)
         return True  # If False, the exception will be re-raised
 
     def stop_experiment(self):

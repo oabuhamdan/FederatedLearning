@@ -1,21 +1,34 @@
 import os
 
+
 class BGTrafficGenerator:
-    def __init__(self, bg_hosts, topo_nodes_info, topo_links_info, log_dir_name):
+    def __init__(self, bg_traffic_conf, bg_hosts, topo_nodes_info, topo_links_info, log_path):
         self.topo_nodes_info = topo_nodes_info
         self.topo_links_info = topo_links_info
-        self.log_path = f"logs/{log_dir_name}/iperf_logs"
+        self.log_path = log_path
         self.bg_hosts = bg_hosts
+        self.bg_traffic_conf = bg_traffic_conf
+
+    def __enter__(self):
+        self.start()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
 
     def gen_traffic(self):
         port = 12345
+        rate_std = self.bg_traffic_conf['rate_std']
+        time_mean = self.bg_traffic_conf['switch-time-mean']
+        time_std = self.bg_traffic_conf['switch-time-std']
+        concurrent_tcp = self.bg_traffic_conf['concurrent-tcp']
         with open(f"{self.log_path}/traffic_logs.txt", "w") as traffic_log:
             def start_flow(src, dst, rate):
                 nonlocal port
                 log_file = f'{self.log_path}/{src.name}_{dst.name}_{port}_logs.txt'
                 dst.cmd(f"./start_iperf.sh server {port} {log_file}")
                 traffic_log.write(f"From {src.IP()} to {dst.IP()}" f" with rate {rate}\n")
-                src.cmd(f"./start_iperf.sh client {port} {dst.IP()} {rate} {log_file}")
+                src.cmd(f"./start_iperf.sh client  {dst.IP()} {port} {rate} {rate_std}"
+                        f" {time_mean} {time_std} {concurrent_tcp} {log_file}")
                 port += 1
 
             for link in self.topo_links_info:

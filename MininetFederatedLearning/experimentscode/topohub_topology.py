@@ -7,34 +7,41 @@ from mininet.topo import Topo
 
 
 class MyTopo2(Topo):
-    def __init__(self, fl_clients_number, topo_type="gabriel", topo_size=10, variation=5, *args, **kwargs):
+    def __init__(self, topo_conf, client_conf, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.link_config = {"bw": 100, "delay": "2ms", "max_queue_size": 1000}
+        self.link_config = {
+            "bw": topo_conf["links"]["link-bw"],
+            "delay": topo_conf["links"]["link-delay"],
+            "max_queue_size": topo_conf["links"]["link-max-queue-size"]
+        }
+        self.switch_config = dict(protocols="OpenFlow13", failMode='standalone', stp=True)
 
-        self.switch_config = dict(protocols="OpenFlow13")
-        self.topo_type = topo_type
-        self.topo_size = topo_size
-        self.variation = variation
-        self.fl_clients_number = fl_clients_number
-        self.nodes_data, self.links_data, = self.get_data(topo_type, topo_size, variation)
+        self.topo_conf = topo_conf
+        self.client_conf = client_conf
+
+        self.nodes_data, self.links_data, = self.get_data(
+            topo_conf["topo-type"],
+            topo_conf["topo-size"],
+            topo_conf["topo-variation"]
+        )
         self.fl_clients = None
 
         self.containernet_kwargs = {
             "volumes": [
-                "/home/osama/federatedlearning/data:/app/data",
-                "/home/osama/federatedlearning/logs:/app/logs",
-                "/home/osama/federatedlearning/state:/app/state",
+                f"{client_conf['data-mount']}:/app/data",
+                f"{client_conf['logs-mount']}:/app/logs",
                 "/etc/localtime:/etc/localtime:ro",
             ],
             "cls": Docker,
             "sysctls": {"net.ipv4.tcp_congestion_control": "cubic"}
         }
-        self.fl_host_limits = dict(mem_limit="1.5g", memswap_limit="3g", cpu_period=100000,
-                                   cpu_quota=int(0.70 * 100000),
-                                   dimage="fl_mininet_image:flwr15")
-        self.bg_host_limits = dict(mem_limit="256m", memswap_limit="1g", cpu_period=100000,
+        self.fl_host_limits = dict(mem_limit=client_conf['mem-limit'], memswap_limit=client_conf['memswap-limit'],
+                                   cpu_period=100000,
+                                   cpu_quota=int(client_conf['cpu-limit'] * 100000),
+                                   dimage=client_conf['fl-imgname'])
+        self.bg_host_limits = dict(mem_limit="256m", memswap_limit="512m", cpu_period=100000,
                                    cpu_quota=int(0.10 * 100000),
-                                   dimage="bg_mininet_image:latest")
+                                   dimage=client_conf['bg-imgname'])
 
         self.build(config_loaded=True)
 
@@ -45,13 +52,16 @@ class MyTopo2(Topo):
         self.create_nodes(self.nodes_data)
         self.create_links(self.nodes_data, self.links_data)
         fl_server = self.addHost('flserver', ip=f"10.0.0.250", mac="00:00:00:00:00:FA",
-                                 dimage="fl_mininet_image:flwr15", **self.containernet_kwargs)
+                                 dimage=self.client_conf['fl-imgname'], **self.containernet_kwargs)
         nodes_sorted_by_degree = sorted(self.nodes_data.values(), key=lambda x: x["degree"])
         node_max_degree = nodes_sorted_by_degree[-1]["node"]
         self.addLink(node_max_degree, fl_server)
 
-        self.create_bg_hosts()
-        self.fl_clients = self.create_fl_hosts(nodes_sorted_by_degree[:-int(self.topo_size * 0.2)])  # exclude
+        if self.topo_conf["enable-bg-traffic"]:
+            self.create_bg_hosts()
+
+        self.fl_clients = self.create_fl_hosts(
+            nodes_sorted_by_degree[:-int(self.topo_conf["topo-size"] * self.topo_conf["switch-exclude"])])  # exclude
 
     def create_links(self, nodes, links_data):
         for link in links_data:
@@ -73,7 +83,8 @@ class MyTopo2(Topo):
     def create_fl_hosts(self, nodes_sorted_by_degree):
         fl_hosts = [
             self.addHost(f'flclient{i + 1}', ip=f"10.0.0.{i + 1}", mac=self.int_to_mac(i + 1),
-                         **self.containernet_kwargs, **self.fl_host_limits) for i in range(self.fl_clients_number)
+                         **self.containernet_kwargs, **self.fl_host_limits)
+            for i in range(self.topo_conf["clients-number"])
         ]
         for i, host in enumerate(fl_hosts):
             self.addLink(host, nodes_sorted_by_degree[i % len(nodes_sorted_by_degree)]['node'])
@@ -106,12 +117,3 @@ class MyTopo2(Topo):
             nodes[node["id"]] = dict(degree=degree[node["id"]])
 
         return nodes, my_links
-
-    def __str__(self):
-        info = {
-            'topo_type': self.topo_type,
-            'topo_size': self.topo_size,
-            'variation': self.variation,
-            'fl_clients_number': self.fl_clients_number,
-        }
-        return str(info)

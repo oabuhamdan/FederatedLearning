@@ -25,14 +25,18 @@ local-epochs = 1
 batch-size = 32
 clients = 5
 dataset = "cifar10"
-log = "logs/xyz"
-zmq = false
+log = "logs/new_exp/plainfc_1"
+zmq = true
 fl-server-address = "10.0.0.250"
-onos = "10.16.48.213"
+onos = "11.66.33.46"
 
 [tool.flwr.federations]
 default = "docker"
 
 [tool.flwr.federations.docker]
-address = "172.17.0.102:9093"
+address = "172.17.0.17:9093"
+insecure = true
+
+[tool.flwr.federations.local]
+address = "127.0.0.1:9093"
 insecure = true
