@@ -17,7 +17,7 @@ class BGTrafficGenerator:
 
     def gen_traffic(self):
         port = 12345
-        rate_std = self.bg_traffic_conf['rate_std']
+        rate_std = self.bg_traffic_conf['rate-std']
         time_mean = self.bg_traffic_conf['switch-time-mean']
         time_std = self.bg_traffic_conf['switch-time-std']
         concurrent_tcp = self.bg_traffic_conf['concurrent-tcp']
