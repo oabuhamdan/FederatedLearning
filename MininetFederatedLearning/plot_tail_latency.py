@@ -2,7 +2,7 @@ import csv
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
-
+from matplotlib.backends.backend_pdf import PdfPages
 
 def get_info(file_path):
     clients_info = defaultdict(dict)
@@ -26,7 +26,7 @@ def get_info(file_path):
 
 # Part A: Server-to-Client Time Delta Analysis
 def get_server_to_client_time_deltas(round_data):
-    min_time = 0 # min(client["server_to_client_time"] for client in round_data.values())
+    min_time = 0  # min(client["server_to_client_time"] for client in round_data.values())
     deltas = {
         client_name: client["server_to_client_time"] - min_time
         for client_name, client in round_data.items()
@@ -36,7 +36,7 @@ def get_server_to_client_time_deltas(round_data):
 
 # Part B: Client-to-Server Time Delta Analysis
 def get_client_to_server_time_deltas(round_data):
-    min_time = 0 #min(client["client_to_server_time"] for client in round_data.values())
+    min_time = 0  # min(client["client_to_server_time"] for client in round_data.values())
     deltas = {
         client_name: client["client_to_server_time"] - min_time
         for client_name, client in round_data.items()
@@ -76,38 +76,41 @@ def plot_all_rounds(clients_info, file_title, round_range=None):
 
         # Extract and append client-to-server times for this round
 
-
     # Plotting
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 5.1),  sharey=True)
 
     # Upper Plot - Server-to-Client Time
-    ax1.text(0.95, 0.99, file_title, fontsize=12, color='red', transform=ax1.transAxes, ha='right', va='top')
-    ax1.bar(round_positions, s2c_data, width=0.8, color='blue', alpha=0.7)
-    ax1.set_title("Server-to-Client Round Time", fontsize=16)
-    ax1.set_ylabel("Time Delta", fontsize=14)
-    ax1.set_xlabel("Clients", fontsize=14)
-    ax1.tick_params(axis='x', which='both', bottom=False)
-    ax1.tick_params(axis='y', labelsize=14)
+    # ax1.text(0.95, 0.99, file_title, fontsize=12, color='red', transform=ax1.transAxes, ha='right', va='top')
+    ax1.bar(round_positions, s2c_data, width=0.8, color='blue', alpha=0.7, label='Server to Client')
+
+    ax1.tick_params(axis='x', which='both',  labelsize=12, pad=6)
+    ax1.tick_params(axis='y', labelsize=20)
     ax1.set_xticks(round_positions)
-    ax1.set_xticklabels(s2c_labels)
+    ax1.set_xticklabels(s2c_labels, rotation=90, va='center')
     ax1.grid(axis='y', linestyle='--', alpha=0.7)
-    ax1.set_ylim(0, 50)
+    ax1.set_ylim(0, 35)
+    ax1.legend(loc='upper right', fontsize=20)
+    ax1.set_yticks([x for x in range(0,35,10)], [str(x) for x in range(0,35,10)])
+
     # Lower Plot - Client-to-Server Time
-    ax2.bar(round_positions, c2s_data, width=0.8, color='green', alpha=0.7)
-    ax2.set_title("Client-to-Server Round Time", fontsize=16)
-    ax2.set_ylabel("Time Delta", fontsize=14)
-    ax2.set_xlabel("Clients", fontsize=14)
-    ax2.tick_params(axis='y', labelsize=14)
+    ax2.bar(round_positions, c2s_data, width=0.8, color='green', alpha=0.7, label='Client to Server',)
+    # ax2.axes.set_xlim(0, 30)
+    ax2.set_xlabel("Clients", fontsize=20)
+    ax2.tick_params(axis='y', labelsize=20)
+    ax2.tick_params(axis='x', which='both', labelsize=12, pad=6)
     ax2.set_xticks(round_positions)
-    ax2.set_xticklabels(c2s_labels)
+    ax2.set_xticklabels(c2s_labels, rotation=90, va='center')
     ax2.grid(axis='y', linestyle='--', alpha=0.7)
-    ax2.set_ylim(0, 40)
+    ax2.set_ylim(0, 35)
+    ax2.set_yticks([x for x in range(0,35,10)], [str(x) for x in range(0,35,10)])
+    ax2.legend(loc='upper right', fontsize=20)
+    plt.tight_layout()
 
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     # plt.show()
-    plt.savefig(f"logs/plots/{file_title.replace('/', '_')}_taillatency.png")
+    fig.text(-0.015, 0.5, 'Time (s)', va='center', rotation='vertical', fontsize=20)
+    plt.savefig(f"logs/plots/per_client_gabriel_15v9_hyb.pdf", bbox_inches='tight')
 
 
-file_title = "50rounds/[withBW]_flowsched_agfc_50rounds_0204_232844"
-clients_info = get_info(f"logs/{file_title}/fl_task_client_times.csv")
-plot_all_rounds(clients_info, file_title, round_range=(10,30))
+file_title = "gabriel15_v9/agmixed"
+clients_info = get_info(f"logs_new/{file_title}/fl_task_client_times.csv")
+plot_all_rounds(clients_info, file_title, round_range=(23, 26))

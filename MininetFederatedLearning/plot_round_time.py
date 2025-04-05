@@ -9,7 +9,7 @@ def plot_round_time(files, round_range=(1, 50)):
     num_files = len(files)
 
     # Create a figure and axes for plotting
-    plt.figure(figsize=(15, 6))
+    plt.figure(figsize=(18, 6))
 
     # Prepare the width of the bars for multiple files (slightly offset)
     bar_width = 0.8 / num_files
@@ -21,7 +21,7 @@ def plot_round_time(files, round_range=(1, 50)):
     # Loop through each file and plot its data
     for i, file_path in enumerate(files):
         # Read the CSV file
-        data = pd.read_csv(f"logs/50rounds/{file_path}/fl_task_overall_times.csv")
+        data = pd.read_csv(f"logs/{file_path}/fl_task_overall_times.csv")
 
         # Extract current_round and round_time columns
         rounds = data['current_round']
@@ -30,7 +30,6 @@ def plot_round_time(files, round_range=(1, 50)):
 
         # Set the position of the bars for this file
         positions = x_positions + i * bar_width
-
         # Plot a bar chart for the round times
         plt.bar(positions, filtered_data['round_time'], bar_width, label=file_path)
 
@@ -47,11 +46,11 @@ def plot_round_time(files, round_range=(1, 50)):
 
     # Show grid
     plt.grid(True)
-
+    plt.tight_layout()
     # Display the plot
     plt.show()
 
 
-files = ['[withBW]_fwd_50rounds0204_192614', '[withBW]_flowsched_agfc_50rounds_0204_232844']  # Update with the actual file paths
-round_range = (1, 50)
+files = ['50rounds_gabriel50_v0/fwd2_r50_g50_v0_0308_191653', '50rounds_gabriel50_v0/agmixed2_r50_g50_v0_0309_014647']
+round_range = (1,29)
 plot_round_time(files, round_range)
