@@ -5,6 +5,7 @@ topo-variation=7
 clients-number=15
 switch-exclude=0.2
 enable-bg-traffic=false
+stp=false
 
 [topology.links]
 link-bw=100 # in Mbps

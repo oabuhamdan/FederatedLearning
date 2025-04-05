@@ -14,7 +14,7 @@ class MyTopo2(Topo):
             "delay": topo_conf["links"]["link-delay"],
             "max_queue_size": topo_conf["links"]["link-max-queue-size"]
         }
-        self.switch_config = dict(protocols="OpenFlow13", failMode='standalone', stp=True)
+        self.switch_config = dict(protocols="OpenFlow13", failMode='standalone', stp=topo_conf["stp"])
 
         self.topo_conf = topo_conf
         self.client_conf = client_conf

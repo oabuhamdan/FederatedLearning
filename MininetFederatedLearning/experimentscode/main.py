@@ -61,7 +61,7 @@ def start():
                     exp_runner.start_experiment()
             else:
                 exp_runner.start_experiment()
-    os.system("pkill -9 bazel")
+    os.system("pkill -9 -f 'bazel|onos'")
 
 
 if __name__ == '__main__':
