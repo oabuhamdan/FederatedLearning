@@ -128,7 +128,7 @@ class MyServer(Server):
         start_time = timeit.default_timer()
         self.client_wise_log.writerow(['current_round', 'client_id', 'round_time', 'server_to_client_time',
                                        'computing_time', 'client_to_server_time'])
-        self.overall_log.writerow(['current_round', 'loss_cen', 'accuracy_cen', 'round_time'])
+        self.overall_log.writerow(['current_round', 'loss_cen', 'accuracy_cen', 'round_time', 'cumulative_time'])
         self.logger.info("Wrote to CSV files")
 
         for current_round in range(1, num_rounds + 1):
@@ -154,12 +154,16 @@ class MyServer(Server):
             if res_cen is not None:
                 loss_cen, metrics_cen = res_cen
                 round_time = round_end_time - round_start_time
+                cumulative_time = timeit.default_timer() - start_time
                 self.logger.info(f"fit progress: ({current_round}, {loss_cen}, {metrics_cen}, {round_time})")
-                self.overall_log.writerow([current_round, loss_cen, metrics_cen['accuracy'], round_time])
+                self.overall_log.writerow([current_round, loss_cen, metrics_cen['accuracy'], round_time, cumulative_time])
                 history.add_loss_centralized(server_round=current_round, loss=loss_cen)
                 history.add_metrics_centralized(
                     server_round=current_round, metrics=metrics_cen
                 )
+                if metrics_cen['accuracy'] >= 0.79:
+                    self.logger.info(f"Reaching Accuracy Level, Breaking!")
+                    break
 
             # Evaluate model on a sample of available clients
             res_fed = self.evaluate_round(server_round=current_round, timeout=timeout)

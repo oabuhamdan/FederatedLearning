@@ -1,3 +1,4 @@
+import concurrent.futures
 import threading
 import time
 from collections import OrderedDict
@@ -8,16 +9,50 @@ import zmq
 from datasets import Dataset
 from flwr.common import GetPropertiesIns
 from flwr.server import SimpleClientManager
-from torchvision.transforms import Compose, ToTensor, Normalize
-import concurrent.futures
+from torchvision import transforms
+from torchvision.models import mobilenet_v3_large
 
 
-def get_dataset(partition, dataset="cifar10", img_key="img"):
-    norm = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+def convert_bn_to_gn(model, num_groups=8):
+    for name, module in model.named_children():
+        if isinstance(module, torch.nn.BatchNorm2d):
+            # Replace with GroupNorm - note the different parameters
+            num_channels = module.num_features
+            setattr(model, name, torch.nn.GroupNorm(
+                num_groups=min(num_groups, num_channels),
+                num_channels=num_channels
+            ))
+        else:
+            convert_bn_to_gn(module, num_groups)
+    return model
+
+
+class Model(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mobilenet = mobilenet_v3_large(weights=None, num_classes=10)
+        self.mobilenet.features[0][0] = torch.nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
+
+    def forward(self, x):
+        return self.mobilenet.forward(x)
+
+
+def get_dataset(partition, dataset="cifar10", img_key="img", dataset_type="train"):
+    train_transformer = transforms.Compose([
+        transforms.RandomResizedCrop(32, scale=(0.8, 1.0)),  # Smaller random crops
+        # transforms.RandomHorizontalFlip(),  # Flip images
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5])  # Normalize
+    ])
+
+    test_transformer = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5])
+    ])
 
     def apply_transforms(batch):
-        pytorch_transforms = Compose([ToTensor(), norm])
         """Apply transforms to the partition from FederatedDataset."""
+        pytorch_transforms = train_transformer if dataset_type == "train" else test_transformer
         batch[img_key] = [pytorch_transforms(img) for img in batch[img_key]]
         return batch
 

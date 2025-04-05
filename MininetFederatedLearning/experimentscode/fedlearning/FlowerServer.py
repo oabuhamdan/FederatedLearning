@@ -1,15 +1,11 @@
 import logging
-import time
-
-import torch
 from flwr.common import Context, ndarrays_to_parameters
 from flwr.server import ServerApp, ServerAppComponents, ServerConfig
-from flwr.server.strategy import FedAvg
+from flwr.server.strategy import FedAvgM
 from torch.utils.data import DataLoader
-from torchvision.models import mobilenet_v3_large
 
 from .my_server_class import MyServer
-from .task import set_weights, get_weights, get_dataset, ZMQHandler, MySimpleClientManager
+from .task import *
 
 
 def test(net, test_loader, device, img_key="img", target_key="label"):
@@ -29,8 +25,9 @@ def test(net, test_loader, device, img_key="img", target_key="label"):
     return loss, accuracy
 
 
-def get_evaluate_fn(model, dataset, device, logger):
-    val_dataloader = DataLoader(get_dataset(partition="server_val_data", dataset=dataset), batch_size=128)
+def get_evaluate_fn(model, dataset_name, device, logger):
+    dataset = get_dataset(partition="server_val_data", dataset=dataset_name)
+    val_dataloader = DataLoader(dataset, batch_size=128)
 
     def evaluate(server_round, parameters, config):
         logger.info(f"Start Eval: {time.strftime('%H:%M:%S')}")
@@ -65,7 +62,7 @@ def server_fn(context: Context):
     num_rounds = context.run_config["rounds"]
     num_clients = context.run_config["clients"]
 
-    net = mobilenet_v3_large(weights=None, num_classes=10)
+    net = Model()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     config = ServerConfig(num_rounds=num_rounds)
@@ -75,11 +72,12 @@ def server_fn(context: Context):
     zmq_handler = ZMQHandler(onos_address, fl_server_address) if use_zmq else None
     client_manager = MySimpleClientManager(zmq_handler, logger)
 
-    strategy = FedAvg(
+    strategy = FedAvgM(
         min_fit_clients=num_clients,
         min_available_clients=num_clients,
         fraction_fit=1,
         fraction_evaluate=0,
+        server_momentum=0.9,
         evaluate_fn=get_evaluate_fn(net, dataset, device, logger),
         initial_parameters=ndarrays_to_parameters(get_weights(net))
     )

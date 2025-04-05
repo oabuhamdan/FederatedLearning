@@ -3,26 +3,22 @@ import json
 import logging
 import random
 import socket
-import time
 import timeit
 
 import flwr as fl
 import psutil
-import torch
-import zmq
+import torch.optim.lr_scheduler
 from flwr.client import ClientApp
 from flwr.common import Context
 from torch.utils.data import DataLoader
-from torchvision.models import mobilenet_v3_large
 
-from .task import set_weights, get_weights, get_dataset, ZMQHandler
+from .task import *
 
 torch.set_num_threads(1)
 flwr_client = None
 
 
 class FlowerClient(fl.client.NumPyClient):
-
     def __init__(self, **kwargs):
         self.cid = kwargs.pop("cid")
         self.node_id = kwargs.pop("node_id")
@@ -32,18 +28,25 @@ class FlowerClient(fl.client.NumPyClient):
         self.logger = kwargs.pop("logger")
         dataset = kwargs.pop("dataset")
 
-        self.net = mobilenet_v3_large(weights=None, num_classes=10)
+        self.net = Model()
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.train_set = get_dataset(dataset=dataset, partition=f"client_{self.cid}_data")
-        self.train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, num_workers=0)
+        self.train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True)
+
+        self.optimizer = torch.optim.SGD(self.net.parameters(), lr=0.01, weight_decay=1e-5, momentum=0.9)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.6, patience=3, min_lr=0.0005, threshold=1e-3)
+        self.criterion = torch.nn.CrossEntropyLoss().to(self.device)
+
         self.logger.info("FlowerClient inside __init__")
 
     def fit(self, parameters, config):
         try:
             self.logger.info(f"Memory usage before Fit(): {psutil.Process().memory_info().rss / 1024 ** 2} MB")
+            self.logger.info(f"LR Value: {self.scheduler.get_last_lr()}")
             computing_start_time = timeit.default_timer()
 
             set_weights(self.net, parameters)
+            self.optimizer.param_groups[0]["params"] = list(self.net.parameters())
 
             loss = self.train()
 
@@ -60,8 +63,6 @@ class FlowerClient(fl.client.NumPyClient):
 
     def train(self):
         self.net.to(self.device)
-        criterion = torch.nn.CrossEntropyLoss().to(self.device)
-        optimizer = torch.optim.SGD(self.net.parameters(), lr=0.01, momentum=0.9)
         self.net.train()
         total_steps = len(self.train_loader)
         running_loss = 0.0
@@ -69,10 +70,10 @@ class FlowerClient(fl.client.NumPyClient):
             for i, batch in enumerate(self.train_loader):
                 images = batch["img"].to(self.device)
                 labels = batch["label"].to(self.device)
-                optimizer.zero_grad()
-                loss = criterion(self.net(images), labels)
+                self.optimizer.zero_grad()
+                loss = self.criterion(self.net(images), labels)
                 loss.backward()
-                optimizer.step()
+                self.optimizer.step()
                 running_loss += loss.item()
                 if i % 100 == 0:
                     self.logger.info(f"Step {i} Epoch {epoch}")
@@ -81,6 +82,7 @@ class FlowerClient(fl.client.NumPyClient):
                     self.send_data_to_server("client_to_server_path", ZMQHandler.MessageType.CLIENT_TO_SERVER.value)
 
         avg_loss = running_loss / len(self.train_loader)
+        self.scheduler.step(avg_loss)
         return avg_loss
 
     def get_properties(self, config):
