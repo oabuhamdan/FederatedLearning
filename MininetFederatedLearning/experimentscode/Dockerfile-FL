@@ -30,10 +30,7 @@ COPY network_stats.sh .
 # Create a virtual environment and install dependencies
 RUN python3 -m venv venv && \
     ./venv/bin/pip install --upgrade pip && \
-    ./venv/bin/pip install -r requirements.txt && \
-    ./venv/bin/pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-
-RUN sed -i '/_reload_modules(project_dir)/s/^/#/' venv/lib/python3.12/site-packages/flwr/common/object_ref.py
+    ./venv/bin/pip install -r requirements.txt
 
 RUN sed -i '4i import os' venv/bin/flwr-serverapp
 RUN sed -i 's/sys.exit(flwr_serverapp())/flwr_serverapp()/g' venv/bin/flwr-serverapp
