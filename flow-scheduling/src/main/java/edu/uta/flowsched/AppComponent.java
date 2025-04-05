@@ -15,6 +15,7 @@
  */
 package edu.uta.flowsched;
 
+import edu.uta.flowsched.schedulers.GreedyFlowScheduler;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
@@ -34,7 +35,6 @@ import java.util.concurrent.TimeUnit;
 @Component(immediate = true,
         service = {AppComponent.class})
 public class AppComponent {
-
     private final Logger log = LoggerFactory.getLogger(getClass());
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 

@@ -1,5 +1,6 @@
 package edu.uta.flowsched;
 
+import edu.uta.flowsched.schedulers.GreedyFlowScheduler;
 import org.onlab.packet.*;
 import org.onosproject.net.*;
 import org.onosproject.net.flow.DefaultFlowRule;
@@ -14,7 +15,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.StreamSupport;
 
 import static org.onlab.packet.Ethernet.TYPE_IPV4;
@@ -46,7 +46,7 @@ public class PathRulesInstaller {
     private void debugRules(FLHost flHost, List<FlowRule> rules, Path path, int delay) {
         String dir = path.dst().hostId().mac().equals(Util.FL_SERVER_MAC) ? "C2S" : "S2C";
         StringBuilder stringBuilder = new StringBuilder();
-        int round = dir.equals("C2S") ? GreedyFlowScheduler.C2S_INSTANCE.getRound() : GreedyFlowScheduler.S2C_INSTANCE.getRound();
+        int round = dir.equals("C2S") ? GreedyFlowScheduler.C2S.getRound() : GreedyFlowScheduler.S2C.getRound();
 
         stringBuilder.append(String.format("\t******* Log %s for Client %s For Round %s Delay %s *******\n", dir, flHost.getFlClientCID(), round, delay));
         rules.forEach(flowRule ->

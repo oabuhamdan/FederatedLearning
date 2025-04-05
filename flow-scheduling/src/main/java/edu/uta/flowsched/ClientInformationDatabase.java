@@ -1,5 +1,6 @@
 package edu.uta.flowsched;
 
+import edu.uta.flowsched.schedulers.GreedyFlowScheduler;
 import org.onlab.packet.MacAddress;
 import org.onlab.util.KryoNamespace;
 import org.onosproject.net.Host;
@@ -106,8 +107,8 @@ public class ClientInformationDatabase {
 
                 flHost.networkStats.setLastRXRate(sentRate); // RX Rate for Host is the TX Rate for Port
                 flHost.networkStats.setLastTXRate(receivedRate); // TX Rate for Host is the RX Rate for Port
-                flHost.networkStats.setRoundReceivedData(GreedyFlowScheduler.S2C_INSTANCE.getRound(), sentBits);
-                flHost.networkStats.setRoundSentData(GreedyFlowScheduler.C2S_INSTANCE.getRound(), receivedBits);
+                flHost.networkStats.setRoundReceivedData(GreedyFlowScheduler.S2C.getRound(), sentBits);
+                flHost.networkStats.setRoundSentData(GreedyFlowScheduler.C2S.getRound(), receivedBits);
 
                 if (sentRate > threshold) {
                     flHost.networkStats.setLastPositiveRXRate(sentRate);

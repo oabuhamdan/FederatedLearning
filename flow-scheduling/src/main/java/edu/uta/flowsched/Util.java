@@ -17,7 +17,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 
 public class Util {
-    static int POLL_FREQ = getPollFreq();
+    public static int POLL_FREQ = getPollFreq();
     static final long MODEL_SIZE = 20 * 1_000_000 * 8; // 20 Mega-bit
     static final MacAddress FL_SERVER_MAC = MacAddress.valueOf("00:00:00:00:00:FA");
     static final Host SERVER_HOST = Services.hostService.getHost(HostId.hostId(FL_SERVER_MAC));
@@ -39,6 +39,11 @@ public class Util {
         return num.longValue() / 1_000_000;
     }
 
+    public static long getAgeInSeconds(long savedTimeMillis) {
+        long currentTimeMillis = System.currentTimeMillis();
+        long timeDifferenceMillis = currentTimeMillis - savedTimeMillis;
+        return timeDifferenceMillis / 1000;
+    }
 
     public static String formatLink(Link link) {
         if (link == null) {
@@ -50,7 +55,7 @@ public class Util {
         return String.format(LINK_STRING_FORMAT, src, dst);
     }
 
-    static void log(String loggerNames, String message) {
+    public static void log(String loggerNames, String message) {
         String[] loggers = loggerNames.split(",");
         for (String loggerName : loggers) {
             try {
@@ -73,7 +78,7 @@ public class Util {
         }
     }
 
-    static void flushWriters() {
+    public static void flushWriters() {
         LOGGERS.forEach((s, bufferedWriter) -> {
             try {
                 bufferedWriter.flush();

@@ -61,7 +61,7 @@ public class MyLink extends DefaultLink implements Serializable {
     public void setCurrentThroughput(long currentThroughput) {
         this.linkThroughput.add(currentThroughput);
         // keep it limited to 10
-        if (this.linkThroughput.size() > 10)
+        if (this.linkThroughput.size() > 5)
             this.linkThroughput.poll();
     }
 

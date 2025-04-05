@@ -1,5 +1,6 @@
 package edu.uta.flowsched;
 
+import edu.uta.flowsched.schedulers.GreedyFlowScheduler;
 import org.onlab.packet.IpAddress;
 import org.onlab.packet.MacAddress;
 import org.onlab.packet.VlanId;
@@ -10,20 +11,19 @@ import org.onosproject.net.HostLocation;
 import org.onosproject.net.provider.ProviderId;
 
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static edu.uta.flowsched.Util.bitToMbit;
 
-class FLHost extends DefaultHost {
+public class FLHost extends DefaultHost {
     private String flClientID;
     private String flClientCID;
     private MyPath currentC2SPath;
     private MyPath currentS2CPath;
+    private long lastPathChange;
     public final NetworkStats networkStats;
-
 
     public FLHost(ProviderId providerId, HostId id, MacAddress mac, VlanId vlan, HostLocation location, Set<IpAddress> ips
             , String flClientID, String flClientCID, Annotations... annotations) {
@@ -33,6 +33,15 @@ class FLHost extends DefaultHost {
         this.currentC2SPath = null;
         this.currentS2CPath = null;
         this.networkStats = new NetworkStats();
+        this.lastPathChange = System.currentTimeMillis();
+    }
+
+    public long getLastPathChange() {
+        return lastPathChange;
+    }
+
+    public void setLastPathChange(long lastPathChange) {
+        this.lastPathChange = lastPathChange;
     }
 
     public String getFlClientCID() {
@@ -77,7 +86,7 @@ class FLHost extends DefaultHost {
         } else throw new RuntimeException("Direction should be assigned");
     }
 
-    class NetworkStats {
+    public static class NetworkStats {
         private final ConcurrentLinkedQueue<Long> lastPositiveTXRate;
         private final ConcurrentLinkedQueue<Long> lastPositiveRXRate;
         private final ConcurrentLinkedQueue<Long> lastTXRate;
@@ -98,8 +107,8 @@ class FLHost extends DefaultHost {
         public String printStats() {
             StringBuilder builder = new StringBuilder();
             try {
-                int c2SRound = GreedyFlowScheduler.C2S_INSTANCE.getRound();
-                int s2cRound = GreedyFlowScheduler.S2C_INSTANCE.getRound();
+                int c2SRound = GreedyFlowScheduler.C2S.getRound();
+                int s2cRound = GreedyFlowScheduler.S2C.getRound();
 
                 builder.append(s2cRound).append(",");
                 builder.append(c2SRound).append(",");
@@ -155,13 +164,13 @@ class FLHost extends DefaultHost {
         public void setLastPositiveRXRate(long lastPositiveRXRate) {
             this.lastPositiveRXRate.add(lastPositiveRXRate);
             // keep it limited to 0
-            if (this.lastPositiveRXRate.size() > 5)
+            if (this.lastPositiveRXRate.size() > 3)
                 this.lastPositiveRXRate.poll();
         }
 
         public void setLastTXRate(long lastTXRate) {
             this.lastTXRate.add(lastTXRate);
-            if (this.lastTXRate.size() > 5)
+            if (this.lastTXRate.size() > 3)
                 this.lastTXRate.poll();
 
         }
