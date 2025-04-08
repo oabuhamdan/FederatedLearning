@@ -48,7 +48,7 @@ def start():
 
     (fl_server, fl_clients), bg_clients = net.get_fl_hosts(), net.get_bg_hosts()
 
-    logs_path = f"{other_conf["logs-path"]}/{other_conf['name']}"
+    logs_path = f"{other_conf['logs-path']}/{other_conf['name']}"
     bg_gen = BGTrafficGenerator(bg_traffic_conf, bg_clients, topo_creator.nodes_data, topo_creator.links_data, logs_path)
     exp_runner = ExperimentRunner(fl_server=fl_server, fl_clients=fl_clients, onos_server=sdn_conf["ip"], logs_path=logs_path)
 
