@@ -1,11 +1,11 @@
 [topology]
 topo-type="gabriel"
 topo-size=15
-topo-variation=7
+topo-variation=9
 clients-number=15
 switch-exclude=0.2
 enable-bg-traffic=false
-stp=false
+stp=true
 
 [topology.links]
 link-bw=100 # in Mbps
@@ -17,6 +17,7 @@ rate-std=10
 switch-time-mean=10
 switch-time-std=3
 concurrent-tcp=1
+max-rate=90
 
 [docker-client]
 mem-limit="1.5g"
@@ -33,5 +34,5 @@ ip="11.66.33.46"
 port=6653
 
 [other]
-name="plainfc_1"
+name="plainfc_5"
 logs-path="logs/new_exp" # relative path
