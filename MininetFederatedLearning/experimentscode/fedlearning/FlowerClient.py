@@ -27,11 +27,11 @@ class FlowerClient(fl.client.NumPyClient):
         self.batch_size = kwargs.pop("batch_size")
         self.logger = kwargs.pop("logger")
         dataset = kwargs.pop("dataset")
-
-        self.net = Model()
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        self.net = Model().to(self.device)
         self.train_set = get_dataset(dataset=dataset, partition=f"client_{self.cid}_data")
-        self.train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True)
+        self.train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, num_workers=4)
 
         self.optimizer = torch.optim.SGD(self.net.parameters(), lr=0.01, weight_decay=1e-5, momentum=0.9)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.6, patience=3, min_lr=0.0005, threshold=1e-3)
@@ -46,7 +46,6 @@ class FlowerClient(fl.client.NumPyClient):
             computing_start_time = timeit.default_timer()
 
             set_weights(self.net, parameters)
-            self.optimizer.param_groups[0]["params"] = list(self.net.parameters())
 
             loss = self.train()
 
@@ -55,14 +54,13 @@ class FlowerClient(fl.client.NumPyClient):
             metrics = {"client": self.cid, "computing_start_time": computing_start_time,
                        "computing_finish_time": computing_finish_time, "loss": loss}
 
-            gc.collect()
+            # gc.collect()
             return get_weights(self.net), len(self.train_loader.dataset), metrics
         except Exception as e:
             self.logger.error(f"ERROR in FIT {e}")
             raise e
 
     def train(self):
-        self.net.to(self.device)
         self.net.train()
         total_steps = len(self.train_loader)
         running_loss = 0.0

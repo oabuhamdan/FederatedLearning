@@ -97,7 +97,7 @@ class MyServer(Server):
             logger=self.logger
         )
         self.logger.info(f"aggregate_fit: received {len(results)} results and {len(failures)} failures")
-        gc.collect()
+        # gc.collect()
         # Aggregate training results
         aggregated_result: tuple[
             Optional[Parameters],
