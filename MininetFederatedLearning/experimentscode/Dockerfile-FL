@@ -1,11 +1,16 @@
 # Use the official Ubuntu image as a base
-FROM ubuntu:latest
+FROM debian:bookworm
 
 # Set environment variables to avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Update the package list and install Python and venv
 RUN apt update && apt install -y \
+    build-essential \
+    libprotobuf-dev \
+    protobuf-compiler \
+    cmake \
+    pkg-config \
     python3 \
     python3-venv \
     python3-pip \
@@ -20,6 +25,7 @@ RUN apt update && apt install -y \
     sed \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt clean
 # Set the working directory inside the container
 WORKDIR /app
 
@@ -29,8 +35,8 @@ COPY requirements.txt .
 COPY network_stats.sh .
 # Create a virtual environment and install dependencies
 RUN python3 -m venv venv && \
-    ./venv/bin/pip install --upgrade pip && \
-    ./venv/bin/pip install -r requirements.txt
+    ./venv/bin/pip install --upgrade pip setuptools wheel && \
+    ./venv/bin/pip install --no-binary=protobuf,grpcio -r requirements.txt
 
 RUN sed -i '4i import os' venv/bin/flwr-serverapp
 RUN sed -i 's/sys.exit(flwr_serverapp())/flwr_serverapp()/g' venv/bin/flwr-serverapp
