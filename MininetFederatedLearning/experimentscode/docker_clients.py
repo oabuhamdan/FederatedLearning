@@ -76,11 +76,12 @@ def main():
     client = docker.from_env()
     network = create_network(client, "my_network")
     name = sys.argv[1]
-    cid = int(sys.argv[2]) if (len(sys.argv) == 3) else None
-    if cid:
+    cid = int(sys.argv[2])
+    log_path = sys.argv[3]
+    if cid > 0:
         name += cid
     container = create_container(client, name, network)
-    run_command_in_container(container, cid)
+    run_command_in_container(container, cid, log_path)
 
 
 if __name__ == "__main__":
