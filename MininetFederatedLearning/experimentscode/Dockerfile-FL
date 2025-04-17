@@ -36,7 +36,7 @@ COPY network_stats.sh .
 # Create a virtual environment and install dependencies
 RUN python3 -m venv venv && \
     ./venv/bin/pip install --upgrade pip setuptools wheel && \
-    ./venv/bin/pip install --no-binary=protobuf,grpcio -r requirements.txt
+    ./venv/bin/pip install -r requirements.txt
 
 RUN sed -i '4i import os' venv/bin/flwr-serverapp
 RUN sed -i 's/sys.exit(flwr_serverapp())/flwr_serverapp()/g' venv/bin/flwr-serverapp
