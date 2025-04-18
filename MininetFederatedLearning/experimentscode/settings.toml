@@ -2,7 +2,7 @@
 topo-type="gabriel"
 topo-size=15
 topo-variation=9
-clients-number=15
+clients-number=5
 switch-exclude=0.2
 enable-bg-traffic=false
 stp=true
@@ -23,16 +23,16 @@ max-rate=90
 mem-limit="1.5g"
 memswap-limit="3g"
 cpu-limit=0.7
-fl-imgname="fl_mininet_image:flwr15"
+fl-imgname="fl_mininet_image:latest"
 bg-imgname="bg_mininet_image:latest"
-data-mount="/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/data" # absolute path
-logs-mount="/home/osama/PycharmProjects/FederatedLearning/MininetFederatedLearning/logs" # absolute path
+data-mount="/home/osama/FederatedLearning/data" # absolute path
+logs-mount="/home/osama/FederatedLearning/logs" # absolute path
 
 [sdn-controller]
-enable=true
+enable=false
 ip="11.66.33.46"
 port=6653
 
 [other]
-name="plainfc_5"
-logs-path="logs/new_exp" # relative path
+name="local"
+logs-path="logs" # relative path
