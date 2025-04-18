@@ -1,11 +1,6 @@
 #!/bin/bash
 
 # Read RX and TX bytes for given interface
-get_interface_stats() {
-    local interface="$1"
-    local stats=$(grep "^[[:space:]]*$interface:" /proc/net/dev | tr -s ' ' | cut -d' ' -f 2,10)
-    echo "$stats"
-}
 interface="$1"
 interval="$2"
 output_file="$3"
@@ -16,18 +11,16 @@ echo "elapsed_seconds,rx_bytes,tx_bytes,rx_rate_bps,tx_rate_bps" > "$output_file
 # Get initial statistics and time
 start_time=$(date +%s%N)
 prev_time=$start_time
-prev_stats=$(get_interface_stats "$interface")
-prev_rx=$(echo "$prev_stats" | cut -d' ' -f1)
-prev_tx=$(echo "$prev_stats" | cut -d' ' -f2)
+prev_rx=$(< /sys/class/net/"$interface"/statistics/rx_bytes)
+prev_tx=$(< /sys/class/net/"$interface"/statistics/tx_bytes)
 
 while true; do
     sleep "$interval"
 
     # Get current time (in nanoseconds) and statistics
     current_time=$(date +%s%N)
-    current_stats=$(get_interface_stats "$interface")
-    curr_rx=$(echo "$current_stats" | cut -d' ' -f1)
-    curr_tx=$(echo "$current_stats" | cut -d' ' -f2)
+    curr_rx=$(< /sys/class/net/"$interface"/statistics/rx_bytes)
+    curr_tx=$(< /sys/class/net/"$interface"/statistics/tx_bytes)
 
     # Calculate actual time difference in seconds (converting from nanoseconds)
     time_diff=$(( (current_time - prev_time) / 1000000000 ))
