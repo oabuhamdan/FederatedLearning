@@ -33,16 +33,15 @@ class ExperimentRunner:
         for host in self.fl_clients:
             host.sendCmd("pkill -9 -f 'network_stats.sh'")
             host.waiting = False
-            host.sendCmd("pkill -9 -f 'Flower|flwr|flower'")
+            host.sendCmd("pkill -9 -f 'Flower|flwr|flower|traffic_monitor'")
             host.waiting = False
-        self.fl_server.sendCmd("pkill -9 -f 'Flower|flwr|flower'")
+        self.fl_server.sendCmd("pkill -9 -f 'Flower|flwr|flower|traffic_monitor'")
         self.fl_server.waiting = False
         self.fl_server.sendCmd("pkill -9 -f 'network_stats.sh'")
         self.fl_server.waiting = False
 
 
     def start_experiment(self):
-        venv = "source venv/bin/activate &&"
         devnull = "/dev/null 2>&1 &"
         serv_inf = self.fl_server.defaultIntf()
         server_addr = str(self.fl_server.params['ip'])
@@ -50,14 +49,15 @@ class ExperimentRunner:
 
         self.fl_server.cmd(f"ip route add {self.onos_server}/32 via 172.17.0.1")
         self.fl_server.cmd(f"./network_stats.sh {serv_inf} 5 {self.log_path}/server_network.csv > {devnull}")
-        self.fl_server.cmd(f"{venv} {env_var} flower-superlink --isolation process --insecure > {devnull}")
-        self.fl_server.sendCmd(f"{venv} {env_var} flwr-serverapp --insecure --run-once")
+        self.fl_server.cmd(f"venv/bin/python3 traffic_monitor.py {self.log_path}/traffic_monitor.csv > {devnull}")
+        self.fl_server.cmd(f"{env_var} venv/bin/flower-superlink --isolation process --insecure > {devnull}")
+        self.fl_server.sendCmd(f" {env_var} venv/bin/flwr-serverapp --insecure --run-once")
 
         for i, client in enumerate(self.fl_clients):
             cmd_supernode = f"flower-supernode --insecure --isolation process --superlink='{server_addr}:9092' --node-config='cid={i + 1}'"
             cmd_clientapp = f"flwr-clientapp --insecure"
-            client.cmd(f"{venv} {env_var} {cmd_supernode} > {devnull}")
-            client.cmd(f"{venv} {env_var} {cmd_clientapp} > {devnull}")
+            client.cmd(f"{env_var} venv/bin/{cmd_supernode} > {devnull}")
+            client.cmd(f"{env_var} venv/bin/{cmd_clientapp} > {devnull}")
             inf = client.defaultIntf()
             client.cmd(f"./network_stats.sh {inf} 5 {self.log_path}/flclient{i}_network.csv > {devnull}")
         print(f"Discarded: {self.fl_server.read(1024)}")
