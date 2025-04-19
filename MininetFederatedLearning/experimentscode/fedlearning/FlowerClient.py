@@ -31,7 +31,7 @@ class FlowerClient(fl.client.NumPyClient):
 
         self.net = Model().to(self.device)
         self.train_set = get_dataset(dataset=dataset, partition=f"client_{self.cid}_data")
-        self.train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, num_workers=4)
+        self.train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True)
 
         self.optimizer = torch.optim.SGD(self.net.parameters(), lr=0.01, weight_decay=1e-5, momentum=0.9)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.6, patience=3, min_lr=0.0005, threshold=1e-3)
