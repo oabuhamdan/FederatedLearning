@@ -1,11 +1,30 @@
 import sys
 import csv
-from scapy.all import sniff
+import threading
+from scapy.all import sniff, IP, TCP, UDP
 from collections import defaultdict
+import signal
 
-from scapy.layers.inet import TCP, UDP, IP
-
+# Traffic data container
 traffic_data = defaultdict(lambda: {"packets": 0, "bytes": 0})
+
+# Lock for thread safety
+data_lock = threading.Lock()
+# File name passed via CLI
+output_file = None
+logged = False
+
+
+def handle_sigterm(signum, frame):
+    print(f"Caught {signal.Signals(signum).name}, shutting down.")
+    log_to_csv_periodically(output_file)
+    sys.exit(0)  # Exit cleanly
+
+
+# Register the signal handler
+signal.signal(signal.SIGTERM, handle_sigterm)
+signal.signal(signal.SIGINT, handle_sigterm)
+signal.signal(signal.SIGHUP, handle_sigterm)
 
 
 def packet_callback(packet):
@@ -26,36 +45,42 @@ def packet_callback(packet):
         size = len(packet)
         key = (src_ip, dst_ip, src_port, dst_port, proto)
 
-        traffic_data[key]["packets"] += 1
-        traffic_data[key]["bytes"] += size
+        with data_lock:
+            traffic_data[key]["packets"] += 1
+            traffic_data[key]["bytes"] += size
 
 
-def write_to_file(filename):
-    with open(filename, mode="w", newline="") as f:
-        writer = csv.writer(f)
-        # Write header
-        writer.writerow(["Src IP", "Dst IP", "Src Port", "Dst Port", "Protocol", "Packets", "Bytes"])
-        # Write each traffic record
-        for (src_ip, dst_ip, src_port, dst_port, proto), data in traffic_data.items():
-            writer.writerow([src_ip, dst_ip, src_port if src_port is not None else "",
-                              dst_port if dst_port is not None else "", proto, data["packets"], data["bytes"] ])
-    print(f"\n[*] Traffic data saved to CSV file: {filename}")
+def log_to_csv_periodically(file):
+    global logged
+    if not logged:
+        logged = True
+        with open(file, "w") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(["Src IP", "Dst IP", "Src Port", "Dst Port", "Protocol", "Packets", "Bytes"])
+            for (src_ip, dst_ip, src_port, dst_port, proto), data in traffic_data.items():
+                writer.writerow([
+                    src_ip,
+                    dst_ip,
+                    src_port if src_port is not None else "",
+                    dst_port if dst_port is not None else "",
+                    proto,
+                    data["packets"],
+                    data["bytes"]
+                ])
 
 
 def main():
-    if len(sys.argv) != 2:
-        print(f"Usage: python {sys.argv[0]} <output_filename>")
-        sys.exit(1)
+    global output_file
 
-    output_file = sys.argv[1]
+    intf = sys.argv[1]
+    output_file = sys.argv[2]
 
-    print(f"[*] Starting packet capture... Output will be saved to '{output_file}'. Press Ctrl+C to stop.")
     try:
-        sniff(prn=packet_callback, store=0)
-    except Exception as e:
-        print("\n[*] Capture stopped. Writing traffic data to file...\n")
+        sniff(prn=packet_callback, store=0, iface=intf)  # Or specify iface manually
+    except KeyboardInterrupt:
+        print("\n[*] Capture stopped. Final data written.\n")
     finally:
-        write_to_file(output_file)
+        log_to_csv_periodically(output_file)
 
 
 if __name__ == "__main__":

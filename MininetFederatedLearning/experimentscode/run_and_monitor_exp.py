@@ -31,13 +31,13 @@ class ExperimentRunner:
         print("Calling Stop Experiment")
         self.fl_server.waiting = False
         for host in self.fl_clients:
-            host.sendCmd("pkill -9 -f 'network_stats.sh'")
+            host.sendCmd("pkill -f 'network_stats.sh'")
             host.waiting = False
-            host.sendCmd("pkill -9 -f 'Flower|flwr|flower|traffic_monitor'")
+            host.sendCmd("pkill -f 'Flower|flwr|flower|traffic_monitor'")
             host.waiting = False
-        self.fl_server.sendCmd("pkill -9 -f 'Flower|flwr|flower|traffic_monitor'")
+        self.fl_server.sendCmd("pkill -f 'Flower|flwr|flower|traffic_monitor'")
         self.fl_server.waiting = False
-        self.fl_server.sendCmd("pkill -9 -f 'network_stats.sh'")
+        self.fl_server.sendCmd("pkill -f 'network_stats.sh'")
         self.fl_server.waiting = False
 
 
@@ -49,7 +49,7 @@ class ExperimentRunner:
 
         self.fl_server.cmd(f"ip route add {self.onos_server}/32 via 172.17.0.1")
         self.fl_server.cmd(f"./network_stats.sh {serv_inf} 5 {self.log_path}/server_network.csv > {devnull}")
-        self.fl_server.cmd(f"venv/bin/python3 traffic_monitor.py {self.log_path}/traffic_monitor.csv > {devnull}")
+        self.fl_server.cmd(f"venv/bin/python3 traffic_monitor.py {serv_inf} {self.log_path}/traffic_monitor_server.csv > {devnull}")
         self.fl_server.cmd(f"{env_var} venv/bin/flower-superlink --isolation process --insecure > {devnull}")
         self.fl_server.sendCmd(f" {env_var} venv/bin/flwr-serverapp --insecure --run-once")
 
@@ -60,5 +60,6 @@ class ExperimentRunner:
             client.cmd(f"{env_var} venv/bin/{cmd_clientapp} > {devnull}")
             inf = client.defaultIntf()
             client.cmd(f"./network_stats.sh {inf} 5 {self.log_path}/flclient{i}_network.csv > {devnull}")
+            client.cmd(f"venv/bin/python3 traffic_monitor.py {inf} {self.log_path}/traffic_monitor_{client.name}.csv > {devnull}")
         print(f"Discarded: {self.fl_server.read(1024)}")
         self.fl_server.waitOutput(verbose=True)
