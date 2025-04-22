@@ -57,8 +57,9 @@ def start():
         CLI(net)
         with exp_runner:
             if topo_conf["enable-bg-traffic"]:
-                with bg_gen:
-                    exp_runner.start_experiment()
+                bg_gen.start()
+                exp_runner.start_experiment()
+                bg_gen.stop()
             else:
                 exp_runner.start_experiment()
     os.system("pkill -9 -f 'bazel|onos'")

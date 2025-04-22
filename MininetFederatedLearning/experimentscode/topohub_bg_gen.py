@@ -11,11 +11,6 @@ class BGTrafficGenerator:
         self.bg_hosts = bg_hosts
         self.bg_traffic_conf = bg_traffic_conf
 
-    def __enter__(self):
-        self.start()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop()
 
     def gen_traffic(self):
         port = 12345

@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 
@@ -12,8 +11,6 @@ class ExperimentRunner:
 
     def __enter__(self):
         os.makedirs(self.log_path, exist_ok=True)
-        with open(f"{self.log_path}/exp_info.txt", "w") as exp_info:
-            exp_info.write(json.dumps(self.__str__()))
         print("Starting Experiment")
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -31,26 +28,19 @@ class ExperimentRunner:
         print("Calling Stop Experiment")
         self.fl_server.waiting = False
         for host in self.fl_clients:
-            host.sendCmd("pkill -f 'network_stats.sh'")
+            host.sendCmd("pkill -f 'Flower|flwr|flower|network_stats'")
             host.waiting = False
-            host.sendCmd("pkill -f 'Flower|flwr|flower|traffic_monitor'")
-            host.waiting = False
-        self.fl_server.sendCmd("pkill -f 'Flower|flwr|flower|traffic_monitor'")
-        self.fl_server.waiting = False
-        self.fl_server.sendCmd("pkill -f 'network_stats.sh'")
+        self.fl_server.sendCmd("pkill -f 'Flower|flwr|flower|network_stats'")
         self.fl_server.waiting = False
 
 
     def start_experiment(self):
         devnull = "/dev/null 2>&1 &"
-        serv_inf = self.fl_server.defaultIntf()
         server_addr = str(self.fl_server.params['ip'])
         env_var = "FLWR_LOG_LEVEL=INFO GRPC_VERBOSITY=ERROR GRPC_TRACE=connectivity_state,client_channel,channel,http,call_error,timer"
 
         self.fl_server.cmd(f"ip route add {self.onos_server}/32 via 172.17.0.1")
-        self.fl_server.cmd(f"tcpdump -i {serv_inf} -w {self.log_path}/server_flower_traffic.pcap > {devnull}")
-        self.fl_server.cmd(f"./network_stats.sh {serv_inf} 5 {self.log_path}/server_network.csv > {devnull}")
-        self.fl_server.cmd(f"venv/bin/python3 traffic_monitor.py {serv_inf} {self.log_path}/traffic_monitor_server.csv > {devnull}")
+        self.fl_server.cmd(f"./network_stats.sh {self.fl_server.defaultIntf()} 5 {self.log_path}/server_network.csv > {devnull}")
         self.fl_server.cmd(f"{env_var} venv/bin/flower-superlink --isolation process --insecure > {devnull}")
         self.fl_server.sendCmd(f" {env_var} venv/bin/flwr-serverapp --insecure --run-once")
 
@@ -59,8 +49,6 @@ class ExperimentRunner:
             cmd_clientapp = f"flwr-clientapp --insecure"
             client.cmd(f"{env_var} venv/bin/{cmd_supernode} > {devnull}")
             client.cmd(f"{env_var} venv/bin/{cmd_clientapp} > {devnull}")
-            inf = client.defaultIntf()
-            client.cmd(f"./network_stats.sh {inf} 5 {self.log_path}/flclient{i}_network.csv > {devnull}")
-            client.cmd(f"venv/bin/python3 traffic_monitor.py {inf} {self.log_path}/traffic_monitor_{client.name}.csv > {devnull}")
+            client.cmd(f"./network_stats.sh {client.defaultIntf()} 5 {self.log_path}/flclient{i}_network.csv > {devnull}")
         print(f"Discarded: {self.fl_server.read(1024)}")
         self.fl_server.waitOutput(verbose=True)
