@@ -48,6 +48,7 @@ class ExperimentRunner:
         env_var = "FLWR_LOG_LEVEL=INFO GRPC_VERBOSITY=ERROR GRPC_TRACE=connectivity_state,client_channel,channel,http,call_error,timer"
 
         self.fl_server.cmd(f"ip route add {self.onos_server}/32 via 172.17.0.1")
+        self.fl_server.cmd(f"tcpdump -i {serv_inf} -w {self.log_path}/server_flower_traffic.pcap > {devnull}")
         self.fl_server.cmd(f"./network_stats.sh {serv_inf} 5 {self.log_path}/server_network.csv > {devnull}")
         self.fl_server.cmd(f"venv/bin/python3 traffic_monitor.py {serv_inf} {self.log_path}/traffic_monitor_server.csv > {devnull}")
         self.fl_server.cmd(f"{env_var} venv/bin/flower-superlink --isolation process --insecure > {devnull}")
