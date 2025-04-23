@@ -164,8 +164,8 @@ class MyServer(Server):
                     server_round=current_round, metrics=metrics_cen
                 )
 
-                if (self.context.run_config['early_stop_accuracy']
-                        and metrics_cen['accuracy'] >= self.context.run_config["accuracy_level"]):
+                if (self.context.run_config['stop-by-accuracy']
+                        and metrics_cen['accuracy'] >= self.context.run_config["accuracy-level"]):
                     self.logger.info(f"Reaching Accuracy Level, Breaking!")
                     break
 
