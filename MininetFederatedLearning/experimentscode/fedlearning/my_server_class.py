@@ -61,7 +61,7 @@ def fit_clients(
 
 
 class MyServer(Server):
-    def __init__(self, *, client_manager, zmq_handler, log_path, strategy, logger):
+    def __init__(self, *, client_manager, zmq_handler, log_path, strategy, logger, context=None):
         super().__init__(client_manager=client_manager, strategy=strategy)
         self.client_wise_file = open(f'{log_path}/fl_task_client_times.csv', 'w')
         self.overall_log_file = open(f'{log_path}/fl_task_overall_times.csv', 'w')
@@ -69,6 +69,7 @@ class MyServer(Server):
         self.overall_log = csv.writer(self.overall_log_file, dialect='unix')
         self.zmq_handler = zmq_handler
         self.logger = logger
+        self.context=context
 
     def fit_round(self, server_round: int, timeout: Optional[float], ):
         client_instructions = self.strategy.configure_fit(
@@ -162,7 +163,9 @@ class MyServer(Server):
                 history.add_metrics_centralized(
                     server_round=current_round, metrics=metrics_cen
                 )
-                if metrics_cen['accuracy'] >= 0.79:
+
+                if (self.context.run_config['early_stop_accuracy']
+                        and metrics_cen['accuracy'] >= self.context.run_config["accuracy_level"]):
                     self.logger.info(f"Reaching Accuracy Level, Breaking!")
                     break
 

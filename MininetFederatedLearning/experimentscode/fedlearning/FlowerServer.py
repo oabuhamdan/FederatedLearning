@@ -83,7 +83,7 @@ def server_fn(context: Context):
     )
 
     server = MyServer(client_manager=client_manager, zmq_handler=zmq_handler, strategy=strategy,
-                      log_path=log_path, logger=logger)
+                      log_path=log_path, logger=logger, context=context)
 
     return ServerAppComponents(config=config, server=server)
 
