@@ -41,7 +41,7 @@ class FlowerClient(fl.client.NumPyClient):
 
     def fit(self, parameters, config):
         try:
-            self.logger.info(f"Memory usage before Fit(): {psutil.Process().memory_info().rss / 1024 ** 2} MB")
+            self.logger.info(f"Memory Usage: {psutil.Process().memory_info().rss / 1024 ** 2} MB")
             self.logger.info(f"LR Value: {self.scheduler.get_last_lr()}")
             computing_start_time = timeit.default_timer()
 
@@ -80,6 +80,7 @@ class FlowerClient(fl.client.NumPyClient):
                     self.send_data_to_server("client_to_server_path", ZMQHandler.MessageType.CLIENT_TO_SERVER.value)
 
         avg_loss = running_loss / len(self.train_loader)
+        self.logger.info(f"Avg loss: {avg_loss}")
         self.scheduler.step(avg_loss)
         return avg_loss
 
