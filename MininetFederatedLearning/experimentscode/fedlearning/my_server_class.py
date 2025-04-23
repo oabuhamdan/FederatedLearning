@@ -1,6 +1,7 @@
 import concurrent.futures
 import csv
 import gc
+import time
 import timeit
 import traceback
 from typing import Optional, Union
@@ -86,7 +87,7 @@ class MyServer(Server):
         if self.zmq_handler:
             round_clients = sorted([client_proxy.cid for client_proxy, _ in client_instructions])
             self.zmq_handler.send_data_to_server(ZMQHandler.MessageType.SERVER_TO_CLIENTS, round_clients)
-            # time.sleep(0.1)
+            time.sleep(0.2)
 
         self.logger.info(f"Memory usage before FitClients(): {psutil.Process().memory_info().rss / 1024 ** 2} MB")
         results, failures = fit_clients(
