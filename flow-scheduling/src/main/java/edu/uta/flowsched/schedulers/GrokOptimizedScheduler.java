@@ -13,6 +13,7 @@ import java.util.*;
 public class GrokOptimizedScheduler extends GreedyFlowScheduler {
     private static final GreedyFlowScheduler S2C_INSTANCE = new GrokOptimizedScheduler(FlowDirection.S2C);
     private static final GreedyFlowScheduler C2S_INSTANCE = new GrokOptimizedScheduler(FlowDirection.C2S);
+    private final MPSolver solver;
 
     public static GreedyFlowScheduler getInstance(FlowDirection direction) {
         return direction.equals(FlowDirection.S2C) ? S2C_INSTANCE : C2S_INSTANCE;
@@ -20,14 +21,14 @@ public class GrokOptimizedScheduler extends GreedyFlowScheduler {
 
     protected GrokOptimizedScheduler(FlowDirection direction) {
         super(direction);
+        solver = MPSolver.createSolver("SCIP");
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        solver.setNumThreads(availableProcessors / 2);
+        solver.setTimeLimit(2000);
     }
 
-    public static Map<FLHost, MyPath> optimizePathAssignment(Map<FLHost, Set<MyPath>> clientPaths, Set<MyLink> networkLinks) {
-        MPSolver solver = MPSolver.createSolver("SCIP");
-        if (solver == null) {
-            throw new RuntimeException("Solver not found");
-        }
-
+    public Map<FLHost, MyPath> optimizePathAssignment(Map<FLHost, Set<MyPath>> clientPaths, Set<MyLink> networkLinks) {
+        this.solver.clear();
         // Binary variables x[i][j]: 1 if path j is selected for client i
         Map<String, Map<String, MPVariable>> x = new HashMap<>();
         for (FLHost client : clientPaths.keySet()) {

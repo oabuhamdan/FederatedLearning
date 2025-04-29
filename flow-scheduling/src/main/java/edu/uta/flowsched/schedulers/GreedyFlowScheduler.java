@@ -44,7 +44,7 @@ public abstract class GreedyFlowScheduler {
     }
 
     public static void activate() {
-        S2C = GrokOptimizedScheduler.getInstance(FlowDirection.S2C);
+        S2C = HybridCapacityScheduler.getInstance(FlowDirection.S2C);
         C2S = HybridCapacityScheduler.getInstance(FlowDirection.C2S);
         executor = Executors.newFixedThreadPool(2);
         waitExecutor = Executors.newScheduledThreadPool(10);
