@@ -30,7 +30,8 @@ class BGTrafficGenerator:
             dst.cmd(f"./start_iperf.sh server {port} {log_file}")
             src.cmd(f"./start_iperf.sh client {dst.IP()} {port} {rate_values_str} {interval_values_str}"
                     f" {concurrent_tcp} {log_file}")
-            port += 1
+            print("Started flow from", src.name, "to", dst.name, "on port", port)
+            port+=1
 
         for link in self.topo_links_info:
             src_switch = link["src"]

@@ -1,5 +1,5 @@
 import os
-import tomllib
+import tomli
 
 from mininet.log import setLogLevel, info
 from mininet.net import Containernet
@@ -24,6 +24,15 @@ class MyMininet(Containernet):
     def get_bg_hosts(self):
         bg_clients = {host.name: host for host in self.hosts if "bgclient" in host.name}
         return bg_clients
+
+    def ping_fl_hosts(self):
+        fl_server, fl_clients = self.get_fl_hosts()
+        for client in fl_clients:
+            result = fl_server.cmd(f"ping -c 1 {client.IP()}")
+            if "1 received" in result:
+                print(f"Ping successful from {fl_server.name} to {client.name}")
+            else:
+                print(f"Ping failed from {fl_server.name} to {client.name} ")
 
     def __enter__(self):
         info('*** Start Network\n')
@@ -52,6 +61,9 @@ def start():
     bg_gen = BGTrafficGenerator(bg_traffic_conf, bg_clients, topo_creator.nodes_data, topo_creator.links_data, logs_path)
     exp_runner = ExperimentRunner(fl_server=fl_server, fl_clients=fl_clients, onos_server=sdn_conf["ip"], logs_path=logs_path)
 
+    if not topo_conf["stp"]:
+        input("STP is disabled. Press Enter to continue...")
+
     with net:
         print("Starting: ", other_conf['name'])
         CLI(net)
@@ -69,7 +81,7 @@ if __name__ == '__main__':
     setLogLevel('info')
 
     with open('settings.toml', 'rb') as f:
-        config = tomllib.load(f)
+        config = tomli.load(f)
 
     topo_conf = config['topology']
     bg_traffic_conf = config['bg-traffic']
