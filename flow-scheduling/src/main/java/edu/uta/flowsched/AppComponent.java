@@ -40,6 +40,7 @@ public class AppComponent {
 
     @Activate
     protected void activate() {
+        OrToolsLoader.INSTANCE.loadNativeLibraries();
         createLogDir();
         LinkInformationDatabase.INSTANCE.activate();
         PathInformationDatabase.INSTANCE.activate();

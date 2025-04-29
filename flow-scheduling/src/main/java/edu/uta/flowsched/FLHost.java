@@ -20,29 +20,19 @@ import static edu.uta.flowsched.Util.bitToMbit;
 public class FLHost extends DefaultHost {
     private String flClientID;
     private String flClientCID;
-    private MyPath currentC2SPath;
-    private MyPath currentS2CPath;
     private long lastPathChange;
     public final NetworkStats networkStats;
+    private MyPath currentPath;
 
     public FLHost(ProviderId providerId, HostId id, MacAddress mac, VlanId vlan, HostLocation location, Set<IpAddress> ips
             , String flClientID, String flClientCID, Annotations... annotations) {
         super(providerId, id, mac, vlan, location, ips, annotations);
         this.flClientID = flClientID;
         this.flClientCID = flClientCID;
-        this.currentC2SPath = null;
-        this.currentS2CPath = null;
         this.networkStats = new NetworkStats();
         this.lastPathChange = System.currentTimeMillis();
     }
 
-    public long getLastPathChange() {
-        return lastPathChange;
-    }
-
-    public void setLastPathChange(long lastPathChange) {
-        this.lastPathChange = lastPathChange;
-    }
 
     public String getFlClientCID() {
         return flClientCID;
@@ -69,21 +59,37 @@ public class FLHost extends DefaultHost {
                 '}';
     }
 
-    public void setCurrentPath(MyPath path, FlowDirection direction) {
-        if (direction.equals(FlowDirection.S2C)) {
-            this.currentS2CPath = path;
-        } else if (direction.equals(FlowDirection.C2S)) {
-            this.currentC2SPath = path;
-        }
+    public long getLastPathChange() {
+        return lastPathChange;
     }
 
+    public void setLastPathChange(long lastPathChange) {
+        this.lastPathChange = lastPathChange;
+    }
 
-    public MyPath getCurrentPath(FlowDirection direction) {
-        if (direction.equals(FlowDirection.S2C)) {
-            return this.currentS2CPath;
-        } else if (direction.equals(FlowDirection.C2S)) {
-            return this.currentC2SPath;
-        } else throw new RuntimeException("Direction should be assigned");
+    public void setCurrentPath(MyPath path) {
+        this.currentPath = path;
+    }
+    public MyPath getCurrentPath() {
+        return currentPath;
+    }
+
+    public Set<FLHost> assignNewPath(MyPath newPath) {
+        Set<FLHost> affectedClients = ConcurrentHashMap.newKeySet();
+        if (this.currentPath != null)
+            affectedClients.addAll(currentPath.removeFlow(this));
+        setCurrentPath(newPath);
+        affectedClients.addAll(newPath.addClient(this));
+        return affectedClients;
+    }
+
+    public boolean clearPath() {
+        if (this.currentPath == null) {
+            return false;
+        }
+        currentPath.removeFlow(this);
+        setCurrentPath(null);
+        return true;
     }
 
     public static class NetworkStats {
@@ -91,7 +97,6 @@ public class FLHost extends DefaultHost {
         private final ConcurrentLinkedQueue<Long> lastPositiveRXRate;
         private final ConcurrentLinkedQueue<Long> lastTXRate;
         private final ConcurrentLinkedQueue<Long> lastRXRate;
-
         private final ConcurrentHashMap<Integer, Long> roundSentData;
         private final ConcurrentHashMap<Integer, Long> roundReceivedData;
 

@@ -30,7 +30,7 @@ public class HybridCapacityScheduler extends GreedyFlowScheduler {
         return pathScores;
     }
 
-    static class HybridScoreCompute {
+    private static class HybridScoreCompute {
         private double maxFairShare;
         private double maxFreeCap;
         private double minFairShare;

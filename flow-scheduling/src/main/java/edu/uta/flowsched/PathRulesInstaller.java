@@ -94,7 +94,7 @@ public class PathRulesInstaller {
         if (permanent)
             ruleBuilder.makePermanent();
         else
-            ruleBuilder.makeTemporary(5);
+            ruleBuilder.makeTemporary(10);
 
         return ruleBuilder.build();
     }

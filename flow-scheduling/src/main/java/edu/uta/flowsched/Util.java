@@ -36,6 +36,8 @@ public class Util {
 
 
     public static long bitToMbit(Number num) {
+        if (num == null)
+            return 0;
         return num.longValue() / 1_000_000;
     }
 

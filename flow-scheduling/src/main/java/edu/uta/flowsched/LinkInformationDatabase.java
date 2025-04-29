@@ -85,8 +85,14 @@ public class LinkInformationDatabase {
         return myLink;
     }
 
-    public List<MyLink> getAllLinkInformation() {
-        return new LinkedList<>(LINK_INFORMATION_MAP.values());
+    public HashSet<MyLink> getAllLinkInformation() {
+        return new HashSet<>(LINK_INFORMATION_MAP.values());
+    }
+
+    public Set<MyLink> allLinksNoEdge() {
+        return LINK_INFORMATION_MAP.values().stream()
+                .filter(myLink -> !myLink.type().equals(Link.Type.EDGE))
+                .collect(Collectors.toSet());
     }
 
     private class LinkThroughputWatcher implements DeviceListener {

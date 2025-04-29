@@ -20,8 +20,7 @@ public class MyLink extends DefaultLink implements Serializable {
     private final ConcurrentLinkedQueue<Long> linkThroughput;
     private double delay;
     private final AtomicLong reservedCapacity;
-    private final Set<FLHost> C2SHosts;
-    private final Set<FLHost> S2CHosts;
+    private final Set<FLHost> clientsUsingPath;
 
     public MyLink(Link link) {
         super(PID, link.src(), link.dst(), link.type(), link.state(), link.annotations());
@@ -29,26 +28,21 @@ public class MyLink extends DefaultLink implements Serializable {
         this.linkThroughput = new ConcurrentLinkedQueue<>();
         this.delay = 0;
         this.reservedCapacity = new AtomicLong(0);
-        this.activeFlows = new AtomicInteger(0);
-        C2SHosts = ConcurrentHashMap.newKeySet();
-        S2CHosts = ConcurrentHashMap.newKeySet();
+        this.activeFlows = new AtomicInteger(1);
+        this.clientsUsingPath = ConcurrentHashMap.newKeySet();
     }
 
     public int getActiveFlows() {
         return activeFlows.get();
     }
 
-    public Set<FLHost> getClientsUsingLink(FlowDirection direction) {
-        return direction.equals(FlowDirection.C2S)? C2SHosts: S2CHosts;
+    public Set<FLHost> getClientsUsingLink() {
+        return Collections.unmodifiableSet(clientsUsingPath);
     }
 
-    public void decreaseActiveFlows() {
-
-    }
     public long getDefaultCapacity() {
         return defaultCapacity;
     }
-
 
     public long getEstimatedFreeCapacity() {
         return getDefaultCapacity() - getThroughput();
@@ -61,7 +55,7 @@ public class MyLink extends DefaultLink implements Serializable {
     public void setCurrentThroughput(long currentThroughput) {
         this.linkThroughput.add(currentThroughput);
         // keep it limited to 10
-        if (this.linkThroughput.size() > 5)
+        if (this.linkThroughput.size() > 3)
             this.linkThroughput.poll();
     }
 
@@ -77,33 +71,68 @@ public class MyLink extends DefaultLink implements Serializable {
         return reservedCapacity.get();
     }
 
-
-    public void addFlow(FLHost client, FlowDirection direction) {
+    public void addFlow(FLHost client) {
         activeFlows.incrementAndGet();
-        if (direction.equals(FlowDirection.C2S)){
-            C2SHosts.add(client);
-        }
-        else {
-            S2CHosts.add(client);
-        }
+        clientsUsingPath.add(client);
     }
 
-    public void removeFlow(FLHost client, FlowDirection direction) {
-        activeFlows.decrementAndGet();
-        if (direction.equals(FlowDirection.C2S)){
-            C2SHosts.remove(client);
+    public void removeFlow(FLHost client) {
+        if (activeFlows.get() > 1)
+            activeFlows.decrementAndGet();
+        clientsUsingPath.remove(client);
+    }
+
+    public static long estimateFairShare(double linkCapacityMbps, double freeCap, int currentActiveFlows, double windowSeconds) {
+        final double MSS_BYTES = 1460;    // typical Ethernet MSS
+        final double C = 0.4;         // CUBIC aggression   (RFC 8312)
+        final double BETA = 0.7;
+        final double RTT_Millis = 5;
+
+        int totalFlows = currentActiveFlows + 1;
+        double fairShare = linkCapacityMbps / totalFlows;  // long-term equal split
+        double residual = Math.max(0.0, freeCap);
+
+        double steadyMbps;
+        if (residual >= fairShare) {
+            double leftover = residual - fairShare;
+            steadyMbps = 0.9 * fairShare + leftover / totalFlows;
+        } else {
+            steadyMbps = 0.9 * fairShare;
         }
-        else {
-            S2CHosts.remove(client);
-        }
+
+        double bytesPerSecFair = (steadyMbps * 1_000_000) / 8.0;
+        double cwndFair = bytesPerSecFair * (RTT_Millis / 1_000.0) / MSS_BYTES;
+
+        double cwnd0 = 10;                      // RFC 6928 initial window ≈ 10 MSS
+        if (cwndFair <= cwnd0) return (long) steadyMbps;  // already above fair cwnd
+        double K = Math.cbrt(cwnd0 * BETA / C);
+        double tEq = K + Math.cbrt((cwndFair - cwnd0) / C);   // seconds to reach cwndFair
+        double penalty = Math.min(1.0, windowSeconds / tEq);
+        return (long) (penalty * steadyMbps);   // Mbps averaged over the time window
     }
 
     public long getCurrentFairShare() {
-        long freeCapacity = getEstimatedFreeCapacity();
-        return activeFlows.get() > 0 ? freeCapacity / activeFlows.get() : freeCapacity;
+        long defaultCapacity = getDefaultCapacity();
+        double partial = Math.max(getEstimatedFreeCapacity() * 1.0 / defaultCapacity, 0.5);
+        long estimatedFairShare = activeFlows.get() > 0 ? defaultCapacity / activeFlows.get() : defaultCapacity;
+        return (long) (partial * estimatedFairShare);
     }
 
     public long getProjectedFairShare() {
-        return getEstimatedFreeCapacity() / (activeFlows.get() + 1);
+        long defaultCapacity = getDefaultCapacity();
+        double partial = Math.max(getEstimatedFreeCapacity() * 1.0 / defaultCapacity, 0.5);
+        long estimatedFairShare = defaultCapacity / (activeFlows.get() + 1);
+        return (long) (partial * estimatedFairShare);
+    }
+
+    public String format() {
+        final String LINK_STRING_FORMAT = "%s -> %s";
+        String src = this.src().elementId().toString().substring(15);
+        String dst = this.dst().elementId().toString().substring(15);
+        return String.format(LINK_STRING_FORMAT, src, dst);
+    }
+
+    public String id(){
+        return String.valueOf(hashCode());
     }
 }
