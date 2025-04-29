@@ -2,10 +2,10 @@
 topo-type="gabriel"
 topo-size=15
 topo-variation=9
-clients-number=5
+clients-number=10
 switch-exclude=0.2
-enable-bg-traffic=false
-stp=true
+enable-bg-traffic=true
+stp=false
 
 [topology.links]
 link-bw=100 # in Mbps
@@ -13,11 +13,11 @@ link-delay="2ms"
 link-max-queue-size=1000 # in packet
 
 [bg-traffic]
-rate-std=10
-switch-time-mean=10
-switch-time-std=3
+rate-std=20
+switch-time-mean=20
+switch-time-std=5
 concurrent-tcp=1
-max-rate=90
+max-rate=100
 
 [docker-client]
 mem-limit="1.5g"
@@ -29,10 +29,10 @@ data-mount="/home/osama/FederatedLearning/data" # absolute path
 logs-mount="/home/osama/FederatedLearning/logs" # absolute path
 
 [sdn-controller]
-enable=false
-ip="11.66.33.46"
+enable=true
+ip=""
 port=6653
 
 [other]
-name="local"
+name=""
 logs-path="logs" # relative path

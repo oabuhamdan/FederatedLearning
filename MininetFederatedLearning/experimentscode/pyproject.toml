@@ -19,22 +19,24 @@ serverapp = "fedlearning.FlowerServer:app"
 clientapp = "fedlearning.FlowerClient:app"
 
 [tool.flwr.app.config]
-rounds = 5
+rounds = 10
 fraction-fit = 1
 local-epochs = 1
 batch-size = 32
-clients = 5
+clients = 10
 dataset = "cifar10"
-log = "logs/local"
-zmq = false
+log = "logs"
+zmq = true
 fl-server-address = "10.0.0.250"
-onos = "11.66.33.46"
+onos = ""
+stop-by-accuracy=false
+accuracy-level=0.8
 
 [tool.flwr.federations]
-default = "local"
+default = "docker"
 
 [tool.flwr.federations.docker]
-address = "172.17.0.17:9093"
+address = "172.17.0.27:9093"
 insecure = true
 
 [tool.flwr.federations.local]
