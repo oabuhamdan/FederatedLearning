@@ -13,11 +13,9 @@ link-delay="2ms"
 link-max-queue-size=1000 # in packet
 
 [bg-traffic]
-rate-std=20
-switch-time-mean=20
-switch-time-std=5
-concurrent-tcp=1
+time-lambda=25
 max-rate=100
+concurrent-tcp=1
 
 [docker-client]
 mem-limit="1.5g"
