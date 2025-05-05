@@ -14,6 +14,7 @@ class BGTrafficGenerator:
 
     def gen_traffic(self):
         port = 12345
+        np.random.seed(1234)
         rate_std = self.bg_traffic_conf['rate-std']
         time_mean = self.bg_traffic_conf['switch-time-mean']
         time_std = self.bg_traffic_conf['switch-time-std']
@@ -21,7 +22,6 @@ class BGTrafficGenerator:
         max_rate = self.bg_traffic_conf['max-rate']
         def start_flow(src, dst, rate):
             nonlocal port
-            np.random.seed(1234)
             rate_values = np.clip(np.random.normal(rate, rate_std, 1000).astype(int), 1, max_rate)
             interval_values = np.clip(np.random.normal(time_mean, time_std, 1000).astype(int), 1, None)
             rate_values_str = shlex.quote(" ".join(map(str, rate_values)))
