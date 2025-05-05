@@ -8,8 +8,10 @@ import org.onlab.packet.MacAddress;
 import org.onosproject.net.HostId;
 import org.zeromq.ZMQ;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ZeroMQServer {
 

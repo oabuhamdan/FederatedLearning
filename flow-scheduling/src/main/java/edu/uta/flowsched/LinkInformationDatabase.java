@@ -3,26 +3,21 @@ package edu.uta.flowsched;
 
 import org.onlab.util.KryoNamespace;
 import org.onosproject.net.ConnectPoint;
-import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.Link;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.PortStatistics;
-import org.onosproject.net.flow.FlowRule;
-import org.onosproject.net.flow.FlowRuleEvent;
-import org.onosproject.net.flow.FlowRuleListener;
-import org.onosproject.net.flow.instructions.Instruction;
-import org.onosproject.net.flow.instructions.Instructions;
 import org.onosproject.store.serializers.KryoNamespaces;
 import org.onosproject.store.service.EventuallyConsistentMap;
 import org.onosproject.store.service.WallClockTimestamp;
 
-import java.util.*;
-import java.util.concurrent.ExecutorService;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.onosproject.net.device.DeviceEvent.Type.PORT_STATS_UPDATED;
@@ -54,8 +49,6 @@ public class LinkInformationDatabase {
         for (Link link : Services.linkService.getLinks()) {
             LINK_INFORMATION_MAP.put(link, new MyLink(link));
         }
-
-//        executor.scheduleAtFixedRate(this::linkInfo, Util.POLL_FREQ, Util.POLL_FREQ, TimeUnit.SECONDS);
     }
 
     protected void deactivate() {
@@ -83,6 +76,10 @@ public class LinkInformationDatabase {
             LINK_INFORMATION_MAP.put(link, myLink);
         }
         return myLink;
+    }
+    public MyLink getLinkInverse(Link link) {
+        Link inverse = Services.linkService.getLink(link.dst(), link.src());
+        return getLinkInformation(inverse);
     }
 
     public HashSet<MyLink> getAllLinkInformation() {

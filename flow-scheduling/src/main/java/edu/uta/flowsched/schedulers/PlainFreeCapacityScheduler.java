@@ -1,6 +1,8 @@
 package edu.uta.flowsched.schedulers;
 
-import edu.uta.flowsched.*;
+import edu.uta.flowsched.FLHost;
+import edu.uta.flowsched.FlowDirection;
+import edu.uta.flowsched.MyPath;
 
 import java.util.*;
 import java.util.function.Function;

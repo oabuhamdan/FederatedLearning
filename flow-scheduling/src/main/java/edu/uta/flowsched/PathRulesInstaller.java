@@ -1,14 +1,13 @@
 package edu.uta.flowsched;
 
 import edu.uta.flowsched.schedulers.GreedyFlowScheduler;
-import org.onlab.packet.*;
-import org.onosproject.net.*;
-import org.onosproject.net.flow.DefaultFlowRule;
-import org.onosproject.net.flow.DefaultTrafficSelector;
-import org.onosproject.net.flow.DefaultTrafficTreatment;
-import org.onosproject.net.flow.FlowRule;
-import org.onosproject.net.flow.TrafficSelector;
-import org.onosproject.net.flow.TrafficTreatment;
+import org.onlab.packet.IPv4;
+import org.onlab.packet.MacAddress;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.*;
 import org.onosproject.net.flow.criteria.Criterion;
 
 import java.util.LinkedList;

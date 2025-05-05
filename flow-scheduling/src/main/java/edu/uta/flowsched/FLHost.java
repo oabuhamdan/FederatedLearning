@@ -11,9 +11,9 @@ import org.onosproject.net.HostLocation;
 import org.onosproject.net.provider.ProviderId;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static edu.uta.flowsched.Util.bitToMbit;
 
@@ -93,18 +93,18 @@ public class FLHost extends DefaultHost {
     }
 
     public static class NetworkStats {
-        private final ConcurrentLinkedQueue<Long> lastPositiveTXRate;
-        private final ConcurrentLinkedQueue<Long> lastPositiveRXRate;
-        private final ConcurrentLinkedQueue<Long> lastTXRate;
-        private final ConcurrentLinkedQueue<Long> lastRXRate;
+        private final BoundedConcurrentLinkedQueue<Long> lastPositiveTXRate;
+        private final BoundedConcurrentLinkedQueue<Long> lastPositiveRXRate;
+        private final BoundedConcurrentLinkedQueue<Long> lastTXRate;
+        private final BoundedConcurrentLinkedQueue<Long> lastRXRate;
         private final ConcurrentHashMap<Integer, Long> roundSentData;
         private final ConcurrentHashMap<Integer, Long> roundReceivedData;
 
         public NetworkStats() {
-            this.lastTXRate = new ConcurrentLinkedQueue<>();
-            this.lastRXRate = new ConcurrentLinkedQueue<>();
-            this.lastPositiveTXRate = new ConcurrentLinkedQueue<>();
-            this.lastPositiveRXRate = new ConcurrentLinkedQueue<>();
+            this.lastTXRate = new BoundedConcurrentLinkedQueue<>(3);
+            this.lastRXRate = new BoundedConcurrentLinkedQueue<>(3);
+            this.lastPositiveTXRate = new BoundedConcurrentLinkedQueue<>(3);
+            this.lastPositiveRXRate = new BoundedConcurrentLinkedQueue<>(3);
             this.roundSentData = new ConcurrentHashMap<>();
             this.roundReceivedData = new ConcurrentHashMap<>();
         }
@@ -135,11 +135,13 @@ public class FLHost extends DefaultHost {
         }
 
         public long getLastPositiveTXRate() {
-            return (long) lastPositiveTXRate.stream().mapToLong(Long::longValue).average().orElse(0);
+            return Optional.ofNullable(this.lastPositiveTXRate.peekLast()).orElse(0L);
+//            return (long) Util.weightedAverage(lastPositiveTXRate, true);
         }
 
         public long getLastPositiveRXRate() {
-            return (long) lastPositiveRXRate.stream().mapToLong(Long::longValue).average().orElse(0);
+            return Optional.ofNullable(this.lastPositiveRXRate.peekLast()).orElse(0L);
+//            return (long) Util.weightedAverage(lastPositiveRXRate, true);
         }
 
         public long getLastPositiveRate(FlowDirection direction) {
@@ -152,38 +154,29 @@ public class FLHost extends DefaultHost {
         }
 
         public long getLastTXRate() {
-            return (long) lastTXRate.stream().mapToLong(Long::longValue).average().orElse(0);
+            return Optional.ofNullable(this.lastTXRate.peekLast()).orElse(0L);
+//            return (long) Util.weightedAverage(lastTXRate, true);
         }
 
         public long getLastRXRate() {
-            return (long) lastRXRate.stream().mapToLong(Long::longValue).average().orElse(0);
+            return Optional.ofNullable(this.lastRXRate.peekLast()).orElse(0L);
+//            return (long) Util.weightedAverage(lastRXRate, true);
         }
 
         public void setLastPositiveTXRate(long lastPositiveTXRate) {
             this.lastPositiveTXRate.add(lastPositiveTXRate);
-            // keep it limited to 0
-            if (this.lastPositiveTXRate.size() > 3)
-                this.lastPositiveTXRate.poll();
         }
 
         public void setLastPositiveRXRate(long lastPositiveRXRate) {
             this.lastPositiveRXRate.add(lastPositiveRXRate);
-            // keep it limited to 0
-            if (this.lastPositiveRXRate.size() > 3)
-                this.lastPositiveRXRate.poll();
         }
 
         public void setLastTXRate(long lastTXRate) {
             this.lastTXRate.add(lastTXRate);
-            if (this.lastTXRate.size() > 3)
-                this.lastTXRate.poll();
-
         }
 
         public void setLastRXRate(long lastRXRate) {
             this.lastRXRate.add(lastRXRate);
-            if (this.lastRXRate.size() > 3)
-                this.lastRXRate.poll();
         }
 
         public long getRoundSentData(int round) {

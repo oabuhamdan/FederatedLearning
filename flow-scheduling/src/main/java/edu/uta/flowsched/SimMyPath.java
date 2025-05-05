@@ -1,11 +1,9 @@
 package edu.uta.flowsched;
 
-import org.onlab.graph.ScalarWeight;
-import org.onosproject.net.*;
-import org.onosproject.net.provider.ProviderId;
+import org.onosproject.net.Path;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.LinkedList;
+import java.util.List;
 
 public class SimMyPath extends MyPath {
     List<SimMyLink> simLinks;

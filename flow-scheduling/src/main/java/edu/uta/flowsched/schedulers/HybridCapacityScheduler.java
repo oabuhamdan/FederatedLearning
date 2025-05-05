@@ -1,11 +1,12 @@
 package edu.uta.flowsched.schedulers;
 
-import edu.uta.flowsched.FLHost;
 import edu.uta.flowsched.FlowDirection;
 import edu.uta.flowsched.MyPath;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 public class HybridCapacityScheduler extends GreedyFlowScheduler {
@@ -22,7 +23,7 @@ public class HybridCapacityScheduler extends GreedyFlowScheduler {
 
     @Override
     protected HashMap<MyPath, Double> scorePaths(Set<MyPath> paths, boolean initial) {
-        double[] values = initial ? new double[] {0.0, 0.7, 0.0, 0.0} : new double[] {0.6, 0.2, 0.1, 0.1};
+        double[] values = initial ? new double[]{0.6, 0.25, 0.15, 0.0} : new double[]{0.6, 0.2, 0.1, 0.1};
         HybridScoreCompute computer = new HybridScoreCompute(paths, values[0], values[1], values[2], values[3]);
         Function<MyPath, Number> pathScore = computer::computeScore;
         HashMap<MyPath, Double> pathScores = new HashMap<>();
@@ -37,7 +38,6 @@ public class HybridCapacityScheduler extends GreedyFlowScheduler {
         private double minFreeCap;
         private double maxHopCount;
         private double minHopCount;
-
         private double maxActiveFlows;
         private double minActiveFlows;
         private final double weightFairShare;
@@ -98,13 +98,21 @@ public class HybridCapacityScheduler extends GreedyFlowScheduler {
             double activeFlows = this.activeFlows.get(path);
             double freeCapacity = this.pathFreeCapacity.get(path);
 
-            double normalizedFreeCap = (freeCapacity - minFreeCap) / Math.max(maxFreeCap - minFreeCap, 1);
-            double normalizedFairShare = (fairShare - minFairShare) / Math.max(maxFairShare - minFairShare, 1);
-            double normalizedHopCount = (maxHopCount - hopCount) / Math.max(maxHopCount - minHopCount, 1);
-            double normalizedActiveFlows = (maxActiveFlows - activeFlows) / Math.max(maxActiveFlows - minActiveFlows, 1);
+            double normalizedFreeCap = normalize(freeCapacity, minFreeCap, maxFreeCap, false);
+            double normalizedFairShare = normalize(fairShare, minFairShare, maxFairShare, false);
+            double normalizedHopCount = normalize(hopCount, minHopCount, maxHopCount, true);
+            double normalizedActiveFlows = normalize(activeFlows, minActiveFlows, maxActiveFlows, true);
 
             return weightFairShare * normalizedFairShare + weightFreeCap * normalizedFreeCap +
                     weightActiveFlows * normalizedActiveFlows + weightHopCount * normalizedHopCount;
+        }
+
+        private double normalize(double rawScore, double minVal, double maxVal, boolean invert) {
+            if (Math.abs(maxVal - minVal) < 1e-10)
+                return 0.5;
+            if (invert)
+                return (maxVal - rawScore) / (maxVal - minVal);
+            return (rawScore - minVal) / (maxVal - minVal);
         }
     }
 }

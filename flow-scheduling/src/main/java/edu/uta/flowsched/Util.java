@@ -2,18 +2,21 @@ package edu.uta.flowsched;
 
 
 import org.onlab.packet.MacAddress;
-import org.onlab.util.DataRateUnit;
 import org.onosproject.cfg.ConfigProperty;
-import org.onosproject.net.*;
+import org.onosproject.net.ElementId;
+import org.onosproject.net.Host;
+import org.onosproject.net.HostId;
+import org.onosproject.net.Link;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.function.Function;
 
 
 public class Util {
@@ -34,6 +37,37 @@ public class Util {
         }
     }
 
+    public static String formatHostId(ElementId elementId){
+        if (elementId instanceof HostId) {
+            HostId dst = (HostId) elementId;
+            if (dst.mac() == Util.FL_SERVER_MAC)
+                return "FLServer";
+            else {
+                Optional<FLHost> host = ClientInformationDatabase.INSTANCE.getHostByHostID(dst);
+                return "FL#" + host.map(FLHost::getFlClientCID).orElse(dst.toString().substring(15));
+            }
+        } else { // Switch
+            return elementId.toString().substring(15);
+        }
+    }
+
+    public static double weightedAverage(Collection<? extends Number> collection, boolean mostRecentFirst) {
+        int size = collection.size();
+        double weightedSum = 0.0;
+        double totalWeight = 0.0;
+        Iterator<? extends Number> iterator = collection.iterator();
+        Function<Integer, Integer> weightFun = mostRecentFirst ? i -> i : i -> size - i;
+        int i = 0;
+        while (iterator.hasNext()){
+            double weight = Math.pow(3, weightFun.apply(i));
+            Number value = iterator.next();
+            weightedSum += value.doubleValue() * weight;
+            totalWeight += weight;
+            i++;
+        }
+
+        return totalWeight == 0 ? 0 : weightedSum / totalWeight;
+    }
 
     public static long bitToMbit(Number num) {
         if (num == null)

@@ -1,14 +1,8 @@
 package edu.uta.flowsched.schedulers;
 
+import com.google.ortools.sat.*;
 import edu.uta.flowsched.*;
-
-import com.google.ortools.sat.CpModel;
-import com.google.ortools.sat.CpSolver;
-import com.google.ortools.sat.CpSolverStatus;
-import com.google.ortools.sat.IntVar;
-import com.google.ortools.sat.LinearExpr;
 import org.onosproject.net.Link;
-
 
 import java.util.*;
 

@@ -4,7 +4,6 @@ import com.google.ortools.linearsolver.MPConstraint;
 import com.google.ortools.linearsolver.MPObjective;
 import com.google.ortools.linearsolver.MPSolver;
 import com.google.ortools.linearsolver.MPVariable;
-import com.google.ortools.sat.*;
 import edu.uta.flowsched.*;
 import org.onosproject.net.Link;
 
@@ -74,7 +73,7 @@ public class GrokOptimizedScheduler extends GreedyFlowScheduler {
             for (MyPath path : clientPaths.get(client)) {
                 Set<Link> linksInPath = path.linksNoEdge();
                 for (Link link : linksInPath) {
-                    double cap_l = ((MyLink) link).getEstimatedFreeCapacity();
+                    double cap_l = ((MyLink) link).getProjectedFairShare();
                     MPConstraint constraint = solver.makeConstraint(-Double.POSITIVE_INFINITY, M,
                             "s2c_congestion_client_" + client.getFlClientID() + "_path_" + path.id() + "_link_" + ((MyLink) link).id());
                     constraint.setCoefficient(n.get(((MyLink) link).id()), 1);

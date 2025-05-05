@@ -1,17 +1,19 @@
 package edu.uta.flowsched;
 
 import org.onlab.graph.ScalarWeight;
-import org.onosproject.net.*;
+import org.onosproject.net.DefaultPath;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
 import org.onosproject.net.provider.ProviderId;
 
-import java.util.*;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.ToLongFunction;
 import java.util.stream.Collectors;
 
 public class MyPath extends DefaultPath {
     private static final ProviderId PID = new ProviderId("flowsched", "edu.uta.flowsched", true);
     private final Set<Link> linksWithoutEdge;
-    private double delay;
     private long lastUpdated;
 
 
@@ -44,25 +46,18 @@ public class MyPath extends DefaultPath {
         return affectedClients;
     }
 
-    public double getDelay() {
-        return delay;
-    }
-
-    public void setDelay(double delay) {
-        this.delay = delay;
+    private long getFairShare(ToLongFunction<? super Link> function) {
+        return linksNoEdge().stream()
+                .mapToLong(function)
+                .min().orElse(0);
     }
 
     public long getCurrentFairShare() {
-        return linksNoEdge().stream()
-                .mapToLong(link -> ((MyLink) link).getCurrentFairShare())
-                .min()
-                .orElse(0);
+        return getFairShare(link -> ((MyLink) link).getCurrentFairShare());
     }
+
     public long getProjectedFairShare() {
-        return linksNoEdge().stream()
-                .mapToLong(link -> ((MyLink) link).getProjectedFairShare())
-                .min()
-                .orElse(0);
+        return getFairShare(link -> ((MyLink) link).getProjectedFairShare());
     }
 
     public long getBottleneckFreeCap() {
@@ -70,6 +65,42 @@ public class MyPath extends DefaultPath {
                 .mapToLong(link -> ((MyLink) link).getEstimatedFreeCapacity())
                 .min()
                 .orElse(0);
+    }
+
+    public double getEffectiveRTT() {
+        double totalLatency = 0;
+        for (Link link : linksNoEdge()) {
+            totalLatency += ((MyLink) link).getLatency();
+            MyLink linkInverse = LinkInformationDatabase.INSTANCE.getLinkInverse(link);
+            totalLatency += linkInverse.getLatency();
+        }
+        return totalLatency;
+    }
+
+    public double getPacketLossProbability() {
+        double survivalRate = 1.0;
+        for (Link link : linksNoEdge()) {
+            survivalRate *= (1 - ((MyLink) link).getPacketLoss());
+        }
+        return 1 - survivalRate;
+    }
+
+    public long cubicCapBps() {
+        // Use the Mathis equation to estimate throughput as Mathis_throughput.
+        // Irrevelant here, since our latency is the queuing latency, not the base one.
+        final double MSS_BITS = 8 * 1460;           // 1 segment in bits
+        final double K_CUBIC = 1.1;
+        double rtt = 2 * getEffectiveRTT() / 1000.0;            // s
+        double loss = Math.max(getPacketLossProbability(), 1e-10);    // avoid div‑by‑0
+        long bps = (long) ((K_CUBIC * MSS_BITS) / (rtt * Math.sqrt(loss)));
+        return Math.min(bps, MyLink.DEFAULT_CAPACITY);
+    }
+
+    public double effectiveScore() {
+        //https://ieeexplore.ieee.org/document/8680730
+        // https://dl.acm.org/doi/10.1145/1111322.1111336
+        double adjustedEffectiveRTT = getEffectiveRTT() * (1 / (1 - getPacketLossProbability()));
+        return getProjectedFairShare() / adjustedEffectiveRTT;
     }
 
     public double getCurrentActiveFlows() {
@@ -82,30 +113,14 @@ public class MyPath extends DefaultPath {
     public String format() {
         StringBuilder stringBuilder = new StringBuilder();
         for (Link link : this.links()) {
-            ElementId id = link.src().elementId();
-            if (id instanceof HostId) {
-                if (((HostId) id).mac() == Util.FL_SERVER_MAC)
-                    stringBuilder.append("FLServer");
-                else {
-                    Optional<FLHost> host = ClientInformationDatabase.INSTANCE.getHostByHostID((HostId) id);
-                    stringBuilder.append("FL#").append(host.map(FLHost::getFlClientCID).orElse(id.toString().substring(15)));
-                }
-            } else { // Switch
-                stringBuilder.append(id.toString().substring(15));
-            }
+            stringBuilder.append(Util.formatHostId(link.src().elementId()));
             stringBuilder.append(" -> ");
         }
-        if (this.dst().hostId().mac() == Util.FL_SERVER_MAC)
-            stringBuilder.append("FLServer");
-        else {
-            HostId dst = this.dst().hostId();
-            Optional<FLHost> host = ClientInformationDatabase.INSTANCE.getHostByHostID(dst);
-            stringBuilder.append("FL#").append(host.map(FLHost::getFlClientCID).orElse(dst.toString().substring(15)));
-        }
+        stringBuilder.append(Util.formatHostId(this.dst().elementId()));
         return stringBuilder.toString();
     }
 
-    public String id(){
+    public String id() {
         return String.valueOf(hashCode());
     }
 }

@@ -45,6 +45,7 @@ public class AppComponent {
         LinkInformationDatabase.INSTANCE.activate();
         PathInformationDatabase.INSTANCE.activate();
         ClientInformationDatabase.INSTANCE.activate();
+        LinkLatencyProbeComponent.INSTANCE.activate();
         GreedyFlowScheduler.activate();
         ZeroMQServer.INSTANCE.activate();
         log.info("Started");
@@ -58,6 +59,7 @@ public class AppComponent {
         ZeroMQServer.INSTANCE.deactivate();
         ClientInformationDatabase.INSTANCE.deactivate();
         GreedyFlowScheduler.deactivate();
+        LinkLatencyProbeComponent.INSTANCE.deactivate();
         Util.closeWriters();
         executor.shutdownNow();
         log.info("Stopped");

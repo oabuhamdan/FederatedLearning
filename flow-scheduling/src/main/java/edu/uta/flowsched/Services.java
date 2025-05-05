@@ -18,12 +18,8 @@ import org.onosproject.net.meter.MeterService;
 import org.onosproject.net.packet.PacketService;
 import org.onosproject.net.statistic.FlowStatisticService;
 import org.onosproject.net.topology.PathService;
-//import org.onosproject.openflow.controller.OpenFlowController;
 import org.onosproject.net.topology.TopologyService;
 import org.onosproject.store.service.StorageService;
-
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 public class Services {
     public static CoreService coreService = DefaultServiceDirectory.getService(CoreService.class);
