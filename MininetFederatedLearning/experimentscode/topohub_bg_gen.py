@@ -16,18 +16,18 @@ class BGTrafficGenerator:
         port = 12345
         np.random.seed(1234)
         time_lambda = self.bg_traffic_conf['time-lambda']
-        concurrent_tcp = self.bg_traffic_conf['concurrent-tcp']
+        p_streams = self.bg_traffic_conf['parallel-streams']
         max_rate = self.bg_traffic_conf['max-rate']
         def start_flow(src, dst, rate):
             nonlocal port
-            rate_values = np.clip(np.random.poisson(rate, 100), 1, max_rate)
+            rate_values = np.clip(np.random.poisson(rate, 100), 1, max_rate) / p_streams
             interval_values = np.random.poisson(time_lambda, 100)
             rate_values_str = shlex.quote(" ".join(map(str, rate_values)))
             interval_values_str = shlex.quote(" ".join(map(str, interval_values)))
             log_file = f'{self.log_path}/{src.name}_{dst.name}_logs.txt'
             dst.cmd(f"./start_iperf.sh server {port} {log_file}")
             src.cmd(f"./start_iperf.sh client {dst.IP()} {port} {rate_values_str} {interval_values_str}"
-                    f" {concurrent_tcp} {log_file}")
+                    f" {p_streams} {log_file}")
             print("Started flow from", src.name, "to", dst.name, "on port", port)
             port+=1
 

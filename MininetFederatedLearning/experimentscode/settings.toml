@@ -15,7 +15,7 @@ link-max-queue-size=1000 # in packet
 [bg-traffic]
 time-lambda=25
 max-rate=100
-concurrent-tcp=1
+parallel-streams=4
 
 [docker-client]
 mem-limit="1.5g"

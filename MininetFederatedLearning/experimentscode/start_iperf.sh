@@ -41,7 +41,7 @@ control_traffic() {
         echo "$(date): Setting traffic rate to $rate Mbps for approximately $interval seconds" >> "$log_path"
 
         # Start iperf3 client with the current rate for the interval duration
-        iperf3 -c "$dst_ip" -i 5 -t "$interval" -b "${rate}M" -p "$port" -P "$parallel" --connect-timeout 500 >> /dev/null 2>&1
+        iperf3 -c "$dst_ip" -N -w4M  -i 5 -t "$interval" -b"${rate}M" -p "$port" -P "$parallel" --connect-timeout 500 >> /dev/null 2>&1
 
         ((rate_index++, interval_index++))
         # Small delay to prevent potential race conditions
