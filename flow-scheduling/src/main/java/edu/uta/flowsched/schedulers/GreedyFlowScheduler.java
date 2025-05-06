@@ -230,9 +230,10 @@ public abstract class GreedyFlowScheduler {
                 long assignedRate = Math.max(client.networkStats.getLastPositiveRate(this.direction), (long) 1e6);
                 long roundExchangedData = client.networkStats.getRoundExchangedData(this.direction, round.get());
                 long dataRemain = DATA_SIZE - roundExchangedData;
+                long lastExchangedRate = client.networkStats.getLastRate(this.direction);
 
-                if (roundExchangedData <= 1e6) {
-                    phase2Logger.append(String.format("\t\tPhase 2 - Client %s exchanged only %sMB!\n", client.getFlClientCID(), bitToMbit(roundExchangedData)));
+                if (lastExchangedRate <= 1e6) {
+                    phase2Logger.append(String.format("\t\tPhase 2 - Client %s exchanged only %sMbps!\n", client.getFlClientCID(), bitToMbit(lastExchangedRate)));
                 }
 
                 int remainingTime = (int) (dataRemain / assignedRate);

@@ -144,6 +144,10 @@ public class FLHost extends DefaultHost {
 //            return (long) Util.weightedAverage(lastPositiveRXRate, true);
         }
 
+        public long getLastRate(FlowDirection direction) {
+            return direction.equals(FlowDirection.S2C) ? this.getLastRXRate() : this.getLastTXRate();
+        }
+
         public long getLastPositiveRate(FlowDirection direction) {
             return direction.equals(FlowDirection.S2C) ? this.getLastPositiveRXRate() : this.getLastPositiveTXRate();
         }
@@ -162,7 +166,6 @@ public class FLHost extends DefaultHost {
             return Optional.ofNullable(this.lastRXRate.peekLast()).orElse(0L);
 //            return (long) Util.weightedAverage(lastRXRate, true);
         }
-
         public void setLastPositiveTXRate(long lastPositiveTXRate) {
             this.lastPositiveTXRate.add(lastPositiveTXRate);
         }
