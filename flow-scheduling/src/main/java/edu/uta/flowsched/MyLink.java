@@ -52,7 +52,8 @@ public class MyLink extends DefaultLink implements Serializable {
     }
 
     public long getThroughput() {
-        return Optional.ofNullable(this.linkThroughput.peekLast()).orElse(0L);
+//        return Optional.ofNullable(this.linkThroughput.peekLast()).orElse(0L);
+        return (long) Util.weightedAverage(this.linkThroughput, true);
     }
 
     public void setCurrentThroughput(long currentThroughput) {
@@ -60,19 +61,17 @@ public class MyLink extends DefaultLink implements Serializable {
     }
 
     public double getLatency() {
-        return Optional.ofNullable(this.latency.peekLast()).orElse(0);
-//        return Util.weightedAverage(this.latency, true);
+//        return Optional.ofNullable(this.latency.peekLast()).orElse(0);
+        return Util.weightedAverage(this.latency, true);
     }
 
     public double getPacketLoss() {
-        return Optional.ofNullable(this.packetLoss.peekLast()).orElse(0.0);
-//        return Util.weightedAverage(this.packetLoss, true);
+//        return Optional.ofNullable(this.packetLoss.peekLast()).orElse(0.0);
+        return Util.weightedAverage(this.packetLoss, true);
     }
-
     public void setLatency(int latency) {
         this.latency.add(latency);
     }
-
     public void setPacketLoss(double packetLoss) {
         this.packetLoss.add(packetLoss);
     }

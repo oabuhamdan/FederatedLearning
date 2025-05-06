@@ -20,24 +20,12 @@ import java.util.function.Function;
 
 
 public class Util {
-    public static int POLL_FREQ = getPollFreq();
-    static final long MODEL_SIZE = 20 * 1_000_000 * 8; // 20 Mega-bit
+    public static final int POLL_FREQ = Integer.parseInt(System.getenv("POLL_FREQ"));
     static final MacAddress FL_SERVER_MAC = MacAddress.valueOf("00:00:00:00:00:FA");
-    static final Host SERVER_HOST = Services.hostService.getHost(HostId.hostId(FL_SERVER_MAC));
     private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Util.class);
     final static ConcurrentHashMap<String, BufferedWriter> LOGGERS = new ConcurrentHashMap<>();
 
-
-    private static int getPollFreq() {
-        ConfigProperty pollFreq = Services.cfgService.getProperty("org.onosproject.provider.of.device.impl.OpenFlowDeviceProvider", "portStatsPollFrequency");
-        if (pollFreq == null) {
-            return 5;
-        } else {
-            return pollFreq.asInteger();
-        }
-    }
-
-    public static String formatHostId(ElementId elementId){
+    public static String formatHostId(ElementId elementId) {
         if (elementId instanceof HostId) {
             HostId dst = (HostId) elementId;
             if (dst.mac() == Util.FL_SERVER_MAC)
@@ -58,7 +46,7 @@ public class Util {
         Iterator<? extends Number> iterator = collection.iterator();
         Function<Integer, Integer> weightFun = mostRecentFirst ? i -> i : i -> size - i;
         int i = 0;
-        while (iterator.hasNext()){
+        while (iterator.hasNext()) {
             double weight = Math.pow(3, weightFun.apply(i));
             Number value = iterator.next();
             weightedSum += value.doubleValue() * weight;

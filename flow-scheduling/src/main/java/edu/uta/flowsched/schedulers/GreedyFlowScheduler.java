@@ -12,7 +12,7 @@ import static edu.uta.flowsched.Util.bitToMbit;
 public abstract class GreedyFlowScheduler {
     public static GreedyFlowScheduler S2C;
     public static GreedyFlowScheduler C2S;
-    protected static final double SWITCH_THRESHOLD = 0.3;
+    protected static final double SWITCH_THRESHOLD = 0.35;
     protected static final long DATA_SIZE = 140_000_000; // 17MByte
     protected static final long ALMOST_DONE_DATA_THRESH = DATA_SIZE / 5; // 17MByte
     protected static ExecutorService executor;
@@ -236,7 +236,7 @@ public abstract class GreedyFlowScheduler {
                 }
 
                 int remainingTime = (int) (dataRemain / assignedRate);
-                if (remainingTime <= (Util.POLL_FREQ / 2) || dataRemain <= 5e5) { // 500KB remaining
+                if (remainingTime < Util.POLL_FREQ || dataRemain <= 5e5) { // 500KB remaining
                     completedClients.add(client);
                     if (!client.clearPath())
                         phase2Logger.append(String.format("\t\tPhase 2 - Client %s has no current path!\n", client.getFlClientCID()));

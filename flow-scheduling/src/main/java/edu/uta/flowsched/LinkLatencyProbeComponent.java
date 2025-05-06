@@ -56,7 +56,7 @@ public class LinkLatencyProbeComponent {
         requestPushPacket();
 
         probeWorker = Executors.newSingleThreadScheduledExecutor();
-        probeWorker.scheduleWithFixedDelay(this::sendPacketProbes, Util.POLL_FREQ, Util.POLL_FREQ, TimeUnit.SECONDS);
+        probeWorker.scheduleWithFixedDelay(this::sendPacketProbes, 0, Math.max(Util.POLL_FREQ, 5), TimeUnit.SECONDS);
     }
 
     public void deactivate() {
