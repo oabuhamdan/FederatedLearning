@@ -74,7 +74,7 @@ public class MyPath extends DefaultPath {
             MyLink linkInverse = LinkInformationDatabase.INSTANCE.getLinkInverse(link);
             totalLatency += linkInverse.getLatency();
         }
-        return totalLatency;
+        return Math.log(totalLatency);
     }
 
     public double getPacketLossProbability() {
@@ -99,7 +99,9 @@ public class MyPath extends DefaultPath {
     public double effectiveScore() {
         //https://ieeexplore.ieee.org/document/8680730
         // https://dl.acm.org/doi/10.1145/1111322.1111336
-        double adjustedEffectiveRTT = getEffectiveRTT() * (1 / (1 - getPacketLossProbability()));
+        double p = getPacketLossProbability();
+        double effectiveRtt = getEffectiveRTT();
+        double adjustedEffectiveRTT = effectiveRtt / (1 - p);
         return getProjectedFairShare() / adjustedEffectiveRTT;
     }
 
