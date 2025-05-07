@@ -38,14 +38,16 @@ control_traffic() {
         interval_index=$((interval_index % ${#rate_values[@]}))
         interval=${interval_values[$interval_index]}
 
-        echo "$(date): Setting traffic rate to $rate Mbps for approximately $interval seconds" >> "$log_path"
+        timestamp=$(date +"%H:%M:%S")
+        echo "$timestamp: Setting traffic rate to $rate Mbps for approximately $interval seconds" >> "$log_path"
 
+        echo "********* $timestamp: Setting traffic rate to $rate Mbps for approximately $interval seconds*********" >> "$log_path".iperf
         # Start iperf3 client with the current rate for the interval duration
-        iperf3 -c "$dst_ip" -N -w4M  -i 5 -t "$interval" -b"${rate}M" -p "$port" -P "$parallel" --connect-timeout 500 >> /dev/null 2>&1
-
+        iperf3 -c "$dst_ip" -i 5 -t "$interval" -b"${rate}M" -p "$port" -P "$parallel" --logfile "$log_path".iperf >> /dev/null 2>&1
+        echo "*************************************************************************" >> "$log_path".iperf
         ((rate_index++, interval_index++))
         # Small delay to prevent potential race conditions
-        sleep 0.5
+        sleep 0.1
     done
 }
 

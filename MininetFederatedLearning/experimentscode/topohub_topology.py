@@ -33,14 +33,17 @@ class MyTopo2(Topo):
                 "/etc/localtime:/etc/localtime:ro",
             ],
             "cls": Docker,
-            "sysctls": {"net.ipv4.tcp_congestion_control": "cubic"}
         }
         self.fl_host_limits = dict(mem_limit=client_conf['mem-limit'], memswap_limit=client_conf['memswap-limit'],
                                    cpu_period=100000,
                                    cpu_quota=int(client_conf['cpu-limit'] * 100000),
+                                   sysctls={"net.ipv4.tcp_congestion_control": "cubic"},
                                    dimage=client_conf['fl-imgname'])
         self.bg_host_limits = dict(mem_limit="256m", memswap_limit="512m", cpu_period=100000,
                                    cpu_quota=int(0.10 * 100000),
+                                   sysctls={"net.ipv4.tcp_congestion_control": "cubic",
+                                            "net.ipv4.tcp_rmem": "87380 16777216 16777216",
+                                            "net.ipv4.tcp_wmem": "87380 16777216 16777216"},
                                    dimage=client_conf['bg-imgname'])
 
         self.build(config_loaded=True)
