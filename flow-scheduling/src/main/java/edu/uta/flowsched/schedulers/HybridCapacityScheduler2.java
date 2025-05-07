@@ -1,9 +1,6 @@
 package edu.uta.flowsched.schedulers;
 
-import edu.uta.flowsched.FlowDirection;
-import edu.uta.flowsched.MyLink;
-import edu.uta.flowsched.MyPath;
-import edu.uta.flowsched.Util;
+import edu.uta.flowsched.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -101,10 +98,10 @@ public class HybridCapacityScheduler2 extends GreedyFlowScheduler {
         }
     }
 
-    protected void debugPaths(HashMap<MyPath, Double> pathScores) {
+    protected void debugPaths(FLHost client, HashMap<MyPath, Double> pathScores) {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
-        StringBuilder builder = new StringBuilder(String.format("-------- Log paths score for client at %s --------\n", now.format(formatter)));
+        StringBuilder builder = new StringBuilder(String.format("-------- Log paths score for client %s at %s --------\n", client.getFlClientCID(), now.format(formatter)));
         pathScores.entrySet()
                 .stream()
                 .sorted(Comparator.comparingDouble(Map.Entry::getValue))
@@ -113,7 +110,7 @@ public class HybridCapacityScheduler2 extends GreedyFlowScheduler {
                             MyPath path = entry.getKey();
                             builder.append(String.format("\t\tScore: %.2f", entry.getValue()))
                                     .append(" - Path: ")
-                                    .append(String.format(" -- Effective Score: %.2fMbps, PFS: %sMbps, FC:%sMbps, AF: %s", path.effectiveScore(), Util.bitToMbit(path.getProjectedFairShare()), Util.bitToMbit(path.getBottleneckFreeCap()), path.getCurrentActiveFlows()))
+                                    .append(String.format(" -- Effective Score: %.2f, PFS: %sMbps, FC:%sMbps, AF: %s", path.effectiveScore(), Util.bitToMbit(path.getProjectedFairShare()), Util.bitToMbit(path.getBottleneckFreeCap()), path.getCurrentActiveFlows()))
                                     .append("\n");
                             path.links().forEach(l -> {
                                 MyLink link = (MyLink) l;

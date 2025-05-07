@@ -23,7 +23,7 @@ public class HybridCapacityScheduler extends GreedyFlowScheduler {
 
     @Override
     protected HashMap<MyPath, Double> scorePaths(Set<MyPath> paths, boolean initial) {
-        double[] values = initial ? new double[]{0.6, 0.25, 0.15, 0.0} : new double[]{0.6, 0.2, 0.1, 0.1};
+        double[] values = initial ? new double[]{0.0, 0.7, 0.3, 0.0} : new double[]{0.6, 0.2, 0.1, 0.1};
         HybridScoreCompute computer = new HybridScoreCompute(paths, values[0], values[1], values[2], values[3]);
         Function<MyPath, Number> pathScore = computer::computeScore;
         HashMap<MyPath, Double> pathScores = new HashMap<>();

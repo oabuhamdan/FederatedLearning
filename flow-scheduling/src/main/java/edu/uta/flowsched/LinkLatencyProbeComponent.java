@@ -34,7 +34,7 @@ public class LinkLatencyProbeComponent {
     private static final short PROBE_ETHERTYPE = 0x3366;
     private static final String PROBE_SRC = "20:15:08:10:00:05";
     private static final String PROBE_DST = "20:15:08:10:00:09";
-    private static final int NUMBER_PROBE_PACKETS = 50; // Seconds
+    private static final int NUMBER_PROBE_PACKETS = 100;
     private ScheduledExecutorService probeWorker;
     private MaoLinkProbeReceiver linkProbeReceiver;
     private final Map<String, MyLink> linkIDs = new ConcurrentHashMap<>();
@@ -113,7 +113,7 @@ public class LinkLatencyProbeComponent {
             double packetLoss = getPacketLoss(packets);
             packetLoss = Math.max(0.0, Math.min(1.0, packetLoss));
             int averageLatency = (int) packets.stream().mapToLong(p -> p.latency).average().orElse(0.0);
-            entry.getKey().setLatency(averageLatency);
+            entry.getKey().setLatency(getScaledValue(averageLatency));
             entry.getKey().setPacketLoss(packetLoss);
             builder.append(String.format("%s,%s,%s,%s,%.2f\n", now.format(formatter), entry.getKey().format(), entry.getKey().getThroughput(),averageLatency, packetLoss));
         }
@@ -128,6 +128,20 @@ public class LinkLatencyProbeComponent {
         return 1 - (size * 1.0 / diff);
     }
 
+    private int getScaledValue(long value){
+        if (value <= 50)
+            return 2;
+        if (value <= 150)
+            return 3;
+        if (value <= 250)
+            return 4;
+        if (value <= 400)
+            return 5;
+        if (value <= 500)
+            return 6;
+        else
+            return 7;
+    }
     static class PacketSeqTimeStamp {
         int sequence;
         long latency;

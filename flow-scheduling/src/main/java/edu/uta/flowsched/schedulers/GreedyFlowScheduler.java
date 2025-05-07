@@ -135,7 +135,7 @@ public abstract class GreedyFlowScheduler {
             if (!clientAlmostDone(client)) {
                 StringBuilder clientLogger = new StringBuilder(String.format("\t- Client %s: \n", client.getFlClientCID()));
 
-                if (Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ + 1){
+                if (Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L - 1){
                     clientLogger.append("\t\tCurrent Path is Recent, Returning...\n");
                     continue;
                 }
@@ -155,7 +155,7 @@ public abstract class GreedyFlowScheduler {
                         .stream()
                         .max(Comparator.comparingDouble(Map.Entry::getValue))
                         .orElseThrow(() -> new NoSuchElementException("Map is empty"));
-                debugPaths(bestPaths);
+                debugPaths(client, bestPaths);
                 if (shouldSwitchPath(currentPath, bestPath, bestPaths, clientLogger)) {
                     client.setLastPathChange(System.currentTimeMillis());
                     String currentPathFormat = Optional.ofNullable(currentPath).map(MyPath::format).orElse("No Path");
@@ -172,7 +172,7 @@ public abstract class GreedyFlowScheduler {
         }
     }
 
-    void debugPaths(HashMap<MyPath, Double> bestPaths){}
+    void debugPaths(FLHost client, HashMap<MyPath, Double> bestPaths){}
 
     abstract protected HashMap<MyPath, Double> scorePaths(Set<MyPath> paths, boolean initial);
 

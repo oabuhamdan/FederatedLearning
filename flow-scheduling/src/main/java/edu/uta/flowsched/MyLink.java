@@ -121,15 +121,13 @@ public class MyLink extends DefaultLink implements Serializable {
     }
 
     public long getCurrentFairShare() {
-        final double gamma = 0.9;
         int flows = this.activeFlows.get();
-        return (long) (gamma * getEstimatedFreeCapacity() / flows);
+        return getEstimatedFreeCapacity() / flows;
     }
 
     public long getProjectedFairShare() {
-        final double gamma = 0.9;
         int flows = this.activeFlows.get() + 1;
-        return (long) (gamma * getEstimatedFreeCapacity() / flows);
+        return getEstimatedFreeCapacity() / flows;
     }
 
 

@@ -74,7 +74,7 @@ public class MyPath extends DefaultPath {
             MyLink linkInverse = LinkInformationDatabase.INSTANCE.getLinkInverse(link);
             totalLatency += linkInverse.getLatency();
         }
-        return Math.log(totalLatency);
+        return totalLatency;
     }
 
     public double getPacketLossProbability() {
@@ -101,8 +101,9 @@ public class MyPath extends DefaultPath {
         // https://dl.acm.org/doi/10.1145/1111322.1111336
         double p = getPacketLossProbability();
         double effectiveRtt = getEffectiveRTT();
-        double adjustedEffectiveRTT = effectiveRtt / (1 - p);
-        return getProjectedFairShare() / adjustedEffectiveRTT;
+        double bottleneckLink = Util.bitToMbit(getProjectedFairShare());
+        double adjustedEffectiveRTT = effectiveRtt * Math.sqrt (p + 1e-2);
+        return bottleneckLink / adjustedEffectiveRTT;
     }
 
     public double getCurrentActiveFlows() {
