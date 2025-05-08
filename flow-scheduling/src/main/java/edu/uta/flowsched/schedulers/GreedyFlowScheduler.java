@@ -145,7 +145,7 @@ public abstract class GreedyFlowScheduler {
                 boolean pathIsNull = currentPath == null;
 
                 if (!pathIsNull) {// Simulate Path
-                    SimMyPath simPath = new SimMyPath(currentPath, currentPath.getCurrentFairShare());
+                    SimMyPath simPath = new SimMyPath(currentPath);
                     paths.remove(currentPath); // replace old with sim
                     paths.add(simPath);
                 }

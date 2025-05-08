@@ -178,3 +178,5 @@ public class LinkLatencyProbeComponent {
         }
     }
 }
+
+// C. Metter, V. Burger, Z. Hu, K. Pei and F. Wamser, "Towards an Active Probing Extension for the ONOS SDN Controller," 2018 28th International Telecommunication Networks and Applications Conference (ITNAC)

@@ -8,11 +8,11 @@ import java.util.List;
 public class SimMyPath extends MyPath {
     List<SimMyLink> simLinks;
 
-    public SimMyPath(Path path, long linkFreeCapAdjustment) {
+    public SimMyPath(MyPath path) {
         super(path);
         simLinks = new LinkedList<>();
         linksNoEdge().forEach(link -> {
-            long newFreeCap = Math.min(((MyLink) link).getEstimatedFreeCapacity() + linkFreeCapAdjustment, ((MyLink) link).getDefaultCapacity());
+            long newFreeCap = ((MyLink) link).getDefaultCapacity() / ((MyLink) link).getActiveFlows();
             SimMyLink simMyLink = new SimMyLink(newFreeCap, Math.max(((MyLink) link).getActiveFlows() - 1, 0));
             simLinks.add(simMyLink);
         });

@@ -21,8 +21,7 @@ public class HybridCapacityScheduler2 extends GreedyFlowScheduler {
 
     @Override
     protected HashMap<MyPath, Double> scorePaths(Set<MyPath> paths, boolean initial) {
-        double[] values = new double[]{1, 0.0, 0.0};
-        HybridScoreCompute computer = new HybridScoreCompute(paths, values[0], values[1], values[2]);
+        HybridScoreCompute computer = new HybridScoreCompute(paths);
         Function<MyPath, Number> pathScore = computer::computeScore;
         HashMap<MyPath, Double> pathScores = new HashMap<>();
         paths.forEach(path -> pathScores.put(path, pathScore.apply(path).doubleValue()));
@@ -32,61 +31,27 @@ public class HybridCapacityScheduler2 extends GreedyFlowScheduler {
     private static class HybridScoreCompute {
         private double maxEffectiveScore;
         private double minEffectiveScore;
-        private final double weightEffectiveScore;
-        private double maxHopCount;
-        private double minHopCount;
-        private final double weightHopCount;
-        private double maxActiveFlows;
-        private double minActiveFlows;
-        private final double weightActiveFlows;
         private final Map<MyPath, Double> effectiveScore;
-        private final Map<MyPath, Double> activeFlows;
 
-        public HybridScoreCompute(Collection<MyPath> paths, double weightEffectiveScore, double weightHopCount, double weightActiveFlows) {
+        public HybridScoreCompute(Collection<MyPath> paths) {
             this.effectiveScore = new HashMap<>();
-            this.activeFlows = new HashMap<>();
-            this.weightEffectiveScore = weightEffectiveScore;
-            this.weightHopCount = weightHopCount;
-            this.weightActiveFlows = weightActiveFlows;
 
             // Calculate Min-Max
             this.minEffectiveScore = Double.MAX_VALUE;
             this.maxEffectiveScore = Double.MIN_VALUE;
 
-            this.maxHopCount = Double.MIN_VALUE;
-            this.minHopCount = Double.MAX_VALUE;
-
-            this.maxActiveFlows = Double.MIN_VALUE;
-            this.minActiveFlows = Double.MAX_VALUE;
-
 
             for (MyPath path : paths) {
                 double effectiveScore = path.effectiveScore();
-                double hopCount = path.linksNoEdge().size();
-                double activeFlows = path.getCurrentActiveFlows();
-
                 this.effectiveScore.put(path, effectiveScore);
-                this.activeFlows.put(path, activeFlows);
-
                 this.minEffectiveScore = Math.min(this.minEffectiveScore, effectiveScore);
                 this.maxEffectiveScore = Math.max(this.maxEffectiveScore, effectiveScore);
-                this.maxHopCount = Math.max(this.maxHopCount, hopCount);
-                this.minHopCount = Math.min(this.minHopCount, hopCount);
-                this.maxActiveFlows = Math.max(this.maxActiveFlows, activeFlows);
-                this.minActiveFlows = Math.min(this.minActiveFlows, activeFlows);
             }
         }
 
         public Number computeScore(MyPath path) {
             double effectiveScore = this.effectiveScore.get(path);
-            int hopCount = path.linksNoEdge().size();
-            double activeFlows = this.activeFlows.get(path);
-
-            double normalizedEffectiveScore = normalize(effectiveScore, minEffectiveScore, maxEffectiveScore, false);
-            double normalizedHopCount = normalize(hopCount, minHopCount, maxHopCount, true);
-            double normalizedActiveFlows = normalize(activeFlows, minActiveFlows, maxActiveFlows, true);
-
-            return weightEffectiveScore * normalizedEffectiveScore +  weightActiveFlows * normalizedActiveFlows + weightHopCount * normalizedHopCount;
+            return normalize(effectiveScore, minEffectiveScore, maxEffectiveScore, false);
         }
 
         private double normalize(double rawScore, double minVal, double maxVal, boolean invert) {
@@ -109,7 +74,7 @@ public class HybridCapacityScheduler2 extends GreedyFlowScheduler {
                         {
                             MyPath path = entry.getKey();
                             builder.append(String.format("\t\tScore: %.2f", entry.getValue()))
-                                    .append(" - Path: ")
+                                    .append(" - Path ").append(path.getClass().getName()).append(" : ")
                                     .append(String.format(" -- Effective Score: %.2f, PFS: %sMbps, FC:%sMbps, AF: %s", path.effectiveScore(), Util.bitToMbit(path.getProjectedFairShare()), Util.bitToMbit(path.getBottleneckFreeCap()), path.getCurrentActiveFlows()))
                                     .append("\n");
                             path.links().forEach(l -> {

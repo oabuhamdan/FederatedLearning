@@ -56,7 +56,7 @@ public class PathInformationDatabase {
 
     public void setPathsToServer(HostId hostId) {
         Set<MyPath> paths = Services.pathService.getKShortestPaths(hostId, HostId.hostId(Util.FL_SERVER_MAC))
-                .limit(5).map(MyPath::new)
+                .limit(10).map(MyPath::new)
                 .collect(Collectors.toSet());
 
         PathRulesInstaller.INSTANCE.installPathRules(ClientInformationDatabase.INSTANCE.getHostByHostID(hostId).get(), (Path) paths.toArray()[0], true);
@@ -65,7 +65,7 @@ public class PathInformationDatabase {
 
     public void setPathsToClient(HostId hostId) {
         Set<MyPath> paths = Services.pathService.getKShortestPaths(HostId.hostId(Util.FL_SERVER_MAC), hostId)
-                .limit(5).map(MyPath::new)
+                .limit(10).map(MyPath::new)
                 .collect(Collectors.toSet());
 
         PathRulesInstaller.INSTANCE.installPathRules(ClientInformationDatabase.INSTANCE.getHostByHostID(hostId).get(), (Path) paths.toArray()[0], true);
