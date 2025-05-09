@@ -18,6 +18,11 @@ public class SimMyPath extends MyPath {
         });
     }
 
+    @Override
+    public double getEffectiveRTT() {
+        return 0.7 * super.getEffectiveRTT();
+    }
+
     public long getCurrentFairShare() {
         return simLinks.stream()
                 .mapToLong(SimMyLink::getCurrentFairShare)

@@ -5,6 +5,7 @@ import edu.uta.flowsched.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static edu.uta.flowsched.Util.bitToMbit;
@@ -12,7 +13,7 @@ import static edu.uta.flowsched.Util.bitToMbit;
 public abstract class GreedyFlowScheduler {
     public static GreedyFlowScheduler S2C;
     public static GreedyFlowScheduler C2S;
-    protected static final double SWITCH_THRESHOLD = 0.35;
+    protected static final double SWITCH_THRESHOLD = 30;
     protected static final long DATA_SIZE = 140_000_000; // 17MByte
     protected static final long ALMOST_DONE_DATA_THRESH = DATA_SIZE / 5; // 17MByte
     protected static ExecutorService executor;
@@ -44,7 +45,7 @@ public abstract class GreedyFlowScheduler {
     }
 
     public static void activate() {
-        S2C = HybridCapacityScheduler2.getInstance(FlowDirection.S2C);
+        S2C = GrokOptimizedScheduler.getInstance(FlowDirection.S2C);
         C2S = HybridCapacityScheduler2.getInstance(FlowDirection.C2S);
         executor = Executors.newFixedThreadPool(2);
         waitExecutor = Executors.newScheduledThreadPool(10);
@@ -94,6 +95,7 @@ public abstract class GreedyFlowScheduler {
     }
 
     protected void main() {
+        AtomicLong phase1Total = new AtomicLong(0), phase2Total = new AtomicLong(0);
         while (completedClients.size() < ClientInformationDatabase.INSTANCE.getTotalFLClients()) {
             try {
                 PathRulesInstaller.INSTANCE.increasePriority();
@@ -102,18 +104,18 @@ public abstract class GreedyFlowScheduler {
                 StringBuilder phase1Logger = new StringBuilder("\tPhase 1:\n");
 
                 needPhase2Processing.addAll(needPhase1Processing);
-                int phase1ClientCount = needPhase1Processing.size();
                 if (!needPhase1Processing.isEmpty()) {
                     phase1(phase1Logger);
-                    phase2();
+                    phase2(phase2Total);
                 }
-                Util.log("overhead", String.format("%s,phase1,%s,%s", this.round.get(), phase1ClientCount, System.currentTimeMillis() - tik));
+                phase1Total.addAndGet(System.currentTimeMillis() - tik);
                 Util.log("greedy" + this.direction, phase1Logger.toString());
             } catch (Exception e) {
                 Util.log("greedy" + this.direction, "Error in scheduler: " + e.getMessage() + "...." + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray()));
                 break;
             }
         }
+
         completedClients.clear();
         needPhase1Processing.clear();
         needPhase2Processing.clear();
@@ -121,6 +123,8 @@ public abstract class GreedyFlowScheduler {
         completionTimes.clear();
         assumedRates.clear();
 
+        Util.log("overhead", String.format("%s,phase1,%s", this.round.get(), phase1Total.get()));
+        Util.log("overhead", String.format("%s,phase2,%s", this.round.get(), phase2Total.get()));
         Util.log("greedy" + this.direction, String.format("******** Round %s Completed ********\n", round.getAndIncrement()));
         Util.flushWriters();
     }
@@ -133,46 +137,47 @@ public abstract class GreedyFlowScheduler {
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
             if (!clientAlmostDone(client)) {
-                StringBuilder clientLogger = new StringBuilder(String.format("\t- Client %s: \n", client.getFlClientCID()));
-
-                if (Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L - 1){
-                    clientLogger.append("\t\tCurrent Path is Recent, Returning...\n");
-                    continue;
-                }
-
-                MyPath currentPath = client.getCurrentPath();
-                Set<MyPath> paths = new HashSet<>(clientPaths.get(client));
-                boolean pathIsNull = currentPath == null;
-
-                if (!pathIsNull) {// Simulate Path
-                    SimMyPath simPath = new SimMyPath(currentPath);
-                    paths.remove(currentPath); // replace old with sim
-                    paths.add(simPath);
-                }
-
-                HashMap<MyPath, Double> bestPaths = scorePaths(paths, false);
-                Map.Entry<MyPath, Double> bestPath = bestPaths.entrySet()
-                        .stream()
-                        .max(Comparator.comparingDouble(Map.Entry::getValue))
-                        .orElseThrow(() -> new NoSuchElementException("Map is empty"));
-                debugPaths(client, bestPaths);
-                if (shouldSwitchPath(currentPath, bestPath, bestPaths, clientLogger)) {
-                    client.setLastPathChange(System.currentTimeMillis());
-                    String currentPathFormat = Optional.ofNullable(currentPath).map(MyPath::format).orElse("No Path");
-                    String newPathFormat = bestPath.getKey().format();
-                    clientLogger.append(String.format("\t\tCurrent Path: %s\n", currentPathFormat));
-                    PathRulesInstaller.INSTANCE.installPathRules(client, bestPath.getKey(), false);
-                    Set<FLHost> affectedClients = client.assignNewPath(bestPath.getKey());
-                    clientLogger.append(String.format("\t\tNew Path: %s\n", newPathFormat));
-                    // The client is among the affected clients from the addition
-                    updateTimeAndRate(affectedClients, internalLogger);
-                }
-                internalLogger.append(clientLogger);
+                continue;
             }
+            StringBuilder clientLogger = new StringBuilder(String.format("\t- Client %s: \n", client.getFlClientCID()));
+            if (Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L) {
+                clientLogger.append("\t\tCurrent Path is Recent, Returning...\n");
+                continue;
+            }
+
+            MyPath currentPath = client.getCurrentPath();
+            Set<MyPath> paths = new HashSet<>(clientPaths.get(client));
+            boolean pathIsNull = currentPath == null;
+
+            if (!pathIsNull) {// Simulate Path
+                SimMyPath simPath = new SimMyPath(currentPath);
+                paths.remove(currentPath); // replace old with sim
+                paths.add(simPath);
+            }
+
+            HashMap<MyPath, Double> bestPaths = scorePaths(paths, false);
+            Map.Entry<MyPath, Double> bestPath = bestPaths.entrySet()
+                    .stream()
+                    .max(Comparator.comparingDouble(Map.Entry::getValue))
+                    .orElseThrow(() -> new NoSuchElementException("Map is empty"));
+//                debugPaths(client, bestPaths);
+            if (shouldSwitchPath(currentPath, bestPath, bestPaths, clientLogger)) {
+                client.setLastPathChange(System.currentTimeMillis());
+                String currentPathFormat = Optional.ofNullable(currentPath).map(MyPath::format).orElse("No Path");
+                String newPathFormat = bestPath.getKey().format();
+                clientLogger.append(String.format("\t\tCurrent Path: %s\n", currentPathFormat));
+                PathRulesInstaller.INSTANCE.installPathRules(client, bestPath.getKey(), false);
+                Set<FLHost> affectedClients = client.assignNewPath(bestPath.getKey());
+                clientLogger.append(String.format("\t\tNew Path: %s\n", newPathFormat));
+                // The client is among the affected clients from the addition
+                updateTimeAndRate(affectedClients, internalLogger);
+            }
+            internalLogger.append(clientLogger);
         }
     }
 
-    void debugPaths(FLHost client, HashMap<MyPath, Double> bestPaths){}
+    void debugPaths(FLHost client, HashMap<MyPath, Double> bestPaths) {
+    }
 
     abstract protected HashMap<MyPath, Double> scorePaths(Set<MyPath> paths, boolean initial);
 
@@ -200,18 +205,16 @@ public abstract class GreedyFlowScheduler {
                 int updatedCompletionTime = (int) Math.round(1.0 * dataRemain / updatedFairShare);
                 completionTimes.put(affectedClient, updatedCompletionTime);
                 assumedRates.put(affectedClient, updatedFairShare);
-//                internalLogger.append(String.format("\t\tClient CID %s, Remain Data %sMbit, Rate %sMbps, Completion Time %d\n",
-//                        affectedClient.getFlClientCID(), bitToMbit(dataRemain), bitToMbit(updatedFairShare), updatedCompletionTime));
             } else {
                 internalLogger.append(String.format("\t\tClient %s has no current path!\n", affectedClient.getFlClientCID()));
             }
         }
     }
 
-    protected void phase2() {
+    protected void phase2(AtomicLong phase2Total) {
         if (future == null || future.isDone()) {
             future = waitExecutor.schedule(() -> {
-                updateClientsStats();
+                updateClientsStats(phase2Total);
                 synchronized (this) {
                     notifyAll(); // Notify the scheduler in case it's waiting
                 }
@@ -219,11 +222,10 @@ public abstract class GreedyFlowScheduler {
         }
     }
 
-    protected void updateClientsStats() {
+    protected void updateClientsStats(AtomicLong phase2Total) {
         StringBuilder phase2Logger = new StringBuilder();
         long tik = System.currentTimeMillis();
         phase2Logger.append("\tPhase 2: \n");
-        int phase2ClientCount = needPhase2Processing.size();
         FLHost client;
         while ((client = needPhase2Processing.poll()) != null) {
             try {
@@ -257,7 +259,7 @@ public abstract class GreedyFlowScheduler {
         phase2Logger.append(String.format("\t** Completed %s/%s Clients**\n", completedClients.size(), ClientInformationDatabase.INSTANCE.getTotalFLClients()));
         phase2Logger.append("\t** Finishing Internal Round**\n");
         Util.log("greedy" + this.direction, phase2Logger.toString());
-        Util.log("overhead", String.format("%s,phase2,%s,%s", this.round.get(), phase2ClientCount, System.currentTimeMillis() - tik));
+        phase2Total.addAndGet(System.currentTimeMillis() - tik);
     }
 
     public List<FLHost> initialSort(List<FLHost> hosts) {

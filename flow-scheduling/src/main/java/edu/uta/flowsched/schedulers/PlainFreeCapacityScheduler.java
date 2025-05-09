@@ -32,9 +32,10 @@ public class PlainFreeCapacityScheduler extends GreedyFlowScheduler {
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
             if (!clientAlmostDone(client)) {
-                StringBuilder clientLogger = new StringBuilder(String.format("\t- Client %s: \n", client.getFlClientCID()));
+                StringBuilder clientLogger = new StringBuilder();
                 MyPath currentPath = client.getCurrentPath();
                 if (currentPath == null) {
+                    clientLogger.append(String.format("\t- Client %s: \n", client.getFlClientCID()));
                     HashMap<MyPath, Double> bestPaths = scorePaths(clientPaths.get(client), false);
                     Map.Entry<MyPath, Double> bestPath = bestPaths.entrySet()
                             .stream()
