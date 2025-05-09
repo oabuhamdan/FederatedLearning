@@ -183,6 +183,8 @@ class MyServer(Server):
             self.client_wise_file.flush()
             self.overall_log_file.flush()
 
+        self.client_wise_file.close()
+        self.overall_log_file.close()
         end_time = timeit.default_timer()
         elapsed = end_time - start_time
         return history, elapsed
