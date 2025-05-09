@@ -2,12 +2,14 @@ package edu.uta.flowsched.schedulers;
 
 import edu.uta.flowsched.*;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static edu.uta.flowsched.Util.LOG_TIME_FORMATTER;
 import static edu.uta.flowsched.Util.bitToMbit;
 
 public abstract class GreedyFlowScheduler {
@@ -45,7 +47,7 @@ public abstract class GreedyFlowScheduler {
     }
 
     public static void activate() {
-        S2C = GrokOptimizedScheduler.getInstance(FlowDirection.S2C);
+        S2C = OptimizedScheduler.getInstance(FlowDirection.S2C);
         C2S = HybridCapacityScheduler2.getInstance(FlowDirection.C2S);
         executor = Executors.newFixedThreadPool(2);
         waitExecutor = Executors.newScheduledThreadPool(10);
@@ -100,16 +102,12 @@ public abstract class GreedyFlowScheduler {
             try {
                 PathRulesInstaller.INSTANCE.increasePriority();
                 getClientsFromQueue();
-                long tik = System.currentTimeMillis();
-                StringBuilder phase1Logger = new StringBuilder("\tPhase 1:\n");
 
                 needPhase2Processing.addAll(needPhase1Processing);
                 if (!needPhase1Processing.isEmpty()) {
-                    phase1(phase1Logger);
+                    phase1(phase1Total);
                     phase2(phase2Total);
                 }
-                phase1Total.addAndGet(System.currentTimeMillis() - tik);
-                Util.log("greedy" + this.direction, phase1Logger.toString());
             } catch (Exception e) {
                 Util.log("greedy" + this.direction, "Error in scheduler: " + e.getMessage() + "...." + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray()));
                 break;
@@ -133,18 +131,15 @@ public abstract class GreedyFlowScheduler {
         return dataRemaining.getOrDefault(client, DATA_SIZE) <= ALMOST_DONE_DATA_THRESH || completionTimes.getOrDefault(client, 100) <= 5;
     }
 
-    protected void phase1(StringBuilder internalLogger) {
+    protected void phase1(AtomicLong phase1Total) {
+        StringBuilder internalLogger = new StringBuilder(String.format("\tPhase 1 -------------%s------------- \n", LocalDateTime.now().format(LOG_TIME_FORMATTER)));
+        long tik = System.currentTimeMillis();
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
-            if (!clientAlmostDone(client)) {
+            if (!clientAlmostDone(client) && Util.getAgeInSeconds(client.getLastPathChange()) >= Util.POLL_FREQ * 2L) {
                 continue;
             }
             StringBuilder clientLogger = new StringBuilder(String.format("\t- Client %s: \n", client.getFlClientCID()));
-            if (Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L) {
-                clientLogger.append("\t\tCurrent Path is Recent, Returning...\n");
-                continue;
-            }
-
             MyPath currentPath = client.getCurrentPath();
             Set<MyPath> paths = new HashSet<>(clientPaths.get(client));
             boolean pathIsNull = currentPath == null;
@@ -174,6 +169,8 @@ public abstract class GreedyFlowScheduler {
             }
             internalLogger.append(clientLogger);
         }
+        phase1Total.addAndGet(System.currentTimeMillis() - tik);
+        Util.log("greedy" + this.direction, internalLogger.toString());
     }
 
     void debugPaths(FLHost client, HashMap<MyPath, Double> bestPaths) {

@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Optional;
@@ -24,7 +26,7 @@ public class Util {
     static final MacAddress FL_SERVER_MAC = MacAddress.valueOf("00:00:00:00:00:FA");
     private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Util.class);
     final static ConcurrentHashMap<String, BufferedWriter> LOGGERS = new ConcurrentHashMap<>();
-
+        public static DateTimeFormatter LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
     public static String formatHostId(ElementId elementId) {
         if (elementId instanceof HostId) {
             HostId dst = (HostId) elementId;
