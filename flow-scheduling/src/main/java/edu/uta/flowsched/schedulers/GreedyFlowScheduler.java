@@ -137,7 +137,7 @@ public abstract class GreedyFlowScheduler {
         long tik = System.currentTimeMillis();
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
-            if (clientAlmostDone(client) && Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L) {
+            if (clientAlmostDone(client) || Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L) {
                 continue;
             }
             StringBuilder clientLogger = new StringBuilder(String.format("\t- Client %s: \n", client.getFlClientCID()));

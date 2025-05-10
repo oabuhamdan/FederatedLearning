@@ -166,7 +166,7 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
         Map<FLHost, Set<MyPath>> clientsPaths = new HashMap<>();
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
-            if (!clientAlmostDone(client) && Util.getAgeInSeconds(client.getLastPathChange()) >= Util.POLL_FREQ * 2L) {
+            if (!(clientAlmostDone(client) || Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L)) {
                 Set<MyPath> paths = new HashSet<>(clientPaths.get(client));
                 clientsPaths.put(client, paths);
             }
