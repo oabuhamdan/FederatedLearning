@@ -38,7 +38,7 @@ public class PlainFreeCapacityScheduler extends GreedyFlowScheduler {
         long tik = System.currentTimeMillis();
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
-            if (!clientAlmostDone(client) && Util.getAgeInSeconds(client.getLastPathChange()) >= Util.POLL_FREQ * 2L) {
+            if (clientAlmostDone(client) && Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L) {
                 continue;
             }
             StringBuilder clientLogger = new StringBuilder();

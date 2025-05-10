@@ -50,7 +50,7 @@ public abstract class GreedyFlowScheduler {
         S2C = OptimizedScheduler.getInstance(FlowDirection.S2C);
         C2S = HybridCapacityScheduler2.getInstance(FlowDirection.C2S);
         executor = Executors.newFixedThreadPool(2);
-        waitExecutor = Executors.newScheduledThreadPool(10);
+        waitExecutor = Executors.newScheduledThreadPool(2);
     }
 
     public void startScheduling() {
@@ -109,7 +109,8 @@ public abstract class GreedyFlowScheduler {
                     phase2(phase2Total);
                 }
             } catch (Exception e) {
-                Util.log("greedy" + this.direction, "Error in scheduler: " + e.getMessage() + "...." + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray()));
+                Util.log("greedy" + this.direction, "Error in scheduler: " + e.getMessage() + "...."
+                        + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray()));
                 break;
             }
         }
@@ -121,8 +122,8 @@ public abstract class GreedyFlowScheduler {
         completionTimes.clear();
         assumedRates.clear();
 
-        Util.log("overhead", String.format("%s,phase1,%s", this.round.get(), phase1Total.get()));
-        Util.log("overhead", String.format("%s,phase2,%s", this.round.get(), phase2Total.get()));
+        Util.log("overhead", String.format("%s,%s,phase1,%s", this.direction, this.round.get(), phase1Total.get()));
+        Util.log("overhead", String.format("%s,%s,phase2,%s", this.direction, this.round.get(), phase2Total.get()));
         Util.log("greedy" + this.direction, String.format("******** Round %s Completed ********\n", round.getAndIncrement()));
         Util.flushWriters();
     }
@@ -136,7 +137,7 @@ public abstract class GreedyFlowScheduler {
         long tik = System.currentTimeMillis();
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
-            if (!clientAlmostDone(client) && Util.getAgeInSeconds(client.getLastPathChange()) >= Util.POLL_FREQ * 2L) {
+            if (clientAlmostDone(client) && Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L) {
                 continue;
             }
             StringBuilder clientLogger = new StringBuilder(String.format("\t- Client %s: \n", client.getFlClientCID()));
