@@ -20,10 +20,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static edu.uta.flowsched.Services.appId;
 import static edu.uta.flowsched.Services.packetService;
@@ -34,8 +31,9 @@ public class LinkLatencyProbeComponent {
     private static final short PROBE_ETHERTYPE = 0x3366;
     private static final String PROBE_SRC = "20:15:08:10:00:05";
     private static final String PROBE_DST = "20:15:08:10:00:09";
-    private static final int NUMBER_PROBE_PACKETS = 100;
-    private ScheduledExecutorService probeWorker;
+    private static final int NUMBER_PROBE_PACKETS = 50;
+    private ScheduledExecutorService probeScheduler;
+    private ExecutorService probeWorker;
     private MaoLinkProbeReceiver linkProbeReceiver;
     private final Map<String, MyLink> linkIDs = new ConcurrentHashMap<>();
     private final Map<String, Integer> linkPacketSequence = new ConcurrentHashMap<>();
@@ -55,12 +53,13 @@ public class LinkLatencyProbeComponent {
         packetService.addProcessor(linkProbeReceiver, PacketProcessor.advisor(1));
         requestPushPacket();
 
-        probeWorker = Executors.newSingleThreadScheduledExecutor();
-        probeWorker.scheduleWithFixedDelay(this::sendPacketProbes, 0, Math.max(Util.POLL_FREQ, 5), TimeUnit.SECONDS);
+        probeWorker = Executors.newFixedThreadPool(10);
+        probeScheduler = Executors.newSingleThreadScheduledExecutor();
+        probeScheduler.scheduleWithFixedDelay(this::sendPacketProbes, 0, Math.max(Util.POLL_FREQ, 5), TimeUnit.SECONDS);
     }
 
     public void deactivate() {
-        probeWorker.shutdown();
+        probeScheduler.shutdown();
         cancelPushPacket();
         packetService.removeProcessor(linkProbeReceiver);
     }
@@ -76,47 +75,50 @@ public class LinkLatencyProbeComponent {
     }
 
     private void sendPacketProbes() {
+        for (MyLink link : linkIDs.values()) {
+            probeWorker.submit(() -> probeOneLine(link));
+        }
+    }
+    private void probeOneLine(MyLink link) {
         try {
-            for (MyLink link : linkIDs.values()) {
-                DeviceId deviceId = link.src().deviceId();
-                TrafficTreatment treatmentAll = DefaultTrafficTreatment.builder().setOutput(link.src().port()).build();
-                Ethernet probePkt = new Ethernet();
-                probePkt.setDestinationMACAddress(PROBE_DST);
-                probePkt.setSourceMACAddress(PROBE_SRC);
-                probePkt.setEtherType(PROBE_ETHERTYPE);
+            DeviceId deviceId = link.src().deviceId();
+            TrafficTreatment treatmentAll = DefaultTrafficTreatment.builder().setOutput(link.src().port()).build();
+            Ethernet probePkt = new Ethernet();
+            probePkt.setDestinationMACAddress(PROBE_DST);
+            probePkt.setSourceMACAddress(PROBE_SRC);
+            probePkt.setEtherType(PROBE_ETHERTYPE);
 
-                int startSeq = linkPacketSequence.get(link.id());
-                for (int i = startSeq; i < startSeq + NUMBER_PROBE_PACKETS; i++) {
-                    byte[] probeData = (i + PROBE_SPLITTER + link.id() + PROBE_SPLITTER + System.currentTimeMillis()).getBytes();
-                    probePkt.setPayload(new Data(probeData));
-                    packetService.emit(new DefaultOutboundPacket(deviceId, treatmentAll, ByteBuffer.wrap(probePkt.serialize())));
-                }
-                linkPacketSequence.computeIfPresent(link.id(), (k, v) -> NUMBER_PROBE_PACKETS + v);
+            int startSeq = linkPacketSequence.get(link.id());
+            for (int i = startSeq; i < startSeq + NUMBER_PROBE_PACKETS; i++) {
+                byte[] probeData = (i + PROBE_SPLITTER + link.id() + PROBE_SPLITTER + System.currentTimeMillis()).getBytes();
+                probePkt.setPayload(new Data(probeData));
+                packetService.emit(new DefaultOutboundPacket(deviceId, treatmentAll, ByteBuffer.wrap(probePkt.serialize())));
             }
-            Thread.sleep(1000);
-            updateLinkStats();
+            linkPacketSequence.computeIfPresent(link.id(), (k, v) -> NUMBER_PROBE_PACKETS + v);
+            Thread.sleep(100);
+            updateLinkStats(link);
         } catch (Exception e) {
             Util.log("general", "Error: " + e.getMessage() + "...." + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray()));
         }
     }
 
-    private void updateLinkStats() {
+    private void updateLinkStats(MyLink link) {
         StringBuilder builder = new StringBuilder();
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
-        for (Map.Entry<MyLink, BoundedConcurrentLinkedQueue<PacketSeqTimeStamp>> entry : linkPackets.entrySet()) {
-            var packets = entry.getValue();
-            if (packets.isEmpty()) {
-                Util.log("general", String.format("Link %s doesn't have packets", entry.getKey().format()));
-                continue;
-            }
-            double packetLoss = getPacketLoss(packets);
-            packetLoss = Math.max(0.0, Math.min(1.0, packetLoss));
-            int averageLatency = (int) packets.stream().mapToLong(p -> p.latency).average().orElse(0.0);
-            entry.getKey().setLatency(getScaledValue(averageLatency));
-            entry.getKey().setPacketLoss(packetLoss);
-            builder.append(String.format("%s,%s,%s,%s,%.2f\n", now.format(formatter), entry.getKey().format(), entry.getKey().getThroughput(),averageLatency, packetLoss));
+        var packets = linkPackets.get(link);
+        if (packets.isEmpty()) {
+            Util.log("general", String.format("Link %s doesn't have packets", link.format()));
+            link.setLatency(4);
+            link.setPacketLoss(0);
+            return;
         }
+        double packetLoss = getPacketLoss(packets);
+        packetLoss = Math.max(0.0, Math.min(1.0, packetLoss));
+        int averageLatency = (int) packets.stream().mapToLong(p -> p.latency).average().orElse(0.0);
+        link.setLatency(getScaledValue(averageLatency));
+        link.setPacketLoss(packetLoss);
+        builder.append(String.format("%s,%s,%s,%s,%.2f\n", now.format(formatter), link.format(), link.getThroughput(), averageLatency, packetLoss));
         Util.log("link_csv", builder.toString());
     }
 

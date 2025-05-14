@@ -99,7 +99,7 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
                     double capEff = capacity / adjRTT;
 
                     // Scale for integer conversion
-                    long scaledCapEff = (long)(capEff * scaleFactor / data);
+                    long scaledCapEff = (long) (capEff * scaleFactor / data);
 
                     // Original constraint was:
                     // activeFlows[link] + T * (-capEff/data) + xVar * numClients <= numClients
@@ -141,6 +141,7 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
         CpSolverStatus status = solver.solve(model);
 
         internalLogger.append(String.format("\t Took %s milliseconds to find optimized paths \n", System.currentTimeMillis() - tik));
+        internalLogger.append(String.format("\t Solution Info: %s \n", solver.getSolutionInfo()));
 
         if (status != CpSolverStatus.OPTIMAL && status != CpSolverStatus.FEASIBLE)
             return null;
@@ -164,17 +165,25 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
         StringBuilder internalLogger = new StringBuilder(String.format("\tPhase 1 -------------%s------------- \n", LocalDateTime.now().format(LOG_TIME_FORMATTER)));
         long tik = System.currentTimeMillis();
         Map<FLHost, Set<MyPath>> clientsPaths = new HashMap<>();
+
+        if (needPhase1Processing.size() < 20) {
+            // Go Greedy if the client's amount is less than 10;
+            HybridCapacityScheduler2.getInstance(this.direction).phase1(phase1Total);
+            return;
+        }
+
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
-            if (!(clientAlmostDone(client) || Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2L)) {
+            if (!(clientAlmostDone(client) || Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 1.5)) {
                 Set<MyPath> paths = new HashSet<>(clientPaths.get(client));
                 clientsPaths.put(client, paths);
             }
         }
 
         Map<FLHost, MyPath> result = optimizePaths(clientsPaths, dataRemaining, internalLogger);
-        if (result == null){
+        if (result == null) {
             internalLogger.append("\t No result found in this round ... Returning \n");
+            Util.log("greedy" + this.direction, internalLogger.toString());
             return;
         }
         for (Map.Entry<FLHost, MyPath> entry : result.entrySet()) {

@@ -49,12 +49,13 @@ public class PlainFreeCapacityScheduler extends GreedyFlowScheduler {
                 Map.Entry<MyPath, Double> bestPath = bestPaths.entrySet()
                         .stream()
                         .max(Comparator.comparingDouble(Map.Entry::getValue))
-                        .orElseThrow(() -> new NoSuchElementException("Map is empty"));
-
-                Set<FLHost> affectedClients = client.assignNewPath(bestPath.getKey());
-                String newPathFormat = bestPath.getKey().format();
-                clientLogger.append(String.format("\t\tNew Path: %s\n", newPathFormat));
-                updateTimeAndRate(affectedClients, internalLogger);
+                        .orElse(null);
+                if (bestPath != null) {
+                    Set<FLHost> affectedClients = client.assignNewPath(bestPath.getKey());
+                    String newPathFormat = bestPath.getKey().format();
+                    clientLogger.append(String.format("\t\tNew Path: %s\n", newPathFormat));
+                    updateTimeAndRate(affectedClients, internalLogger);
+                }
             }
             internalLogger.append(clientLogger);
         }

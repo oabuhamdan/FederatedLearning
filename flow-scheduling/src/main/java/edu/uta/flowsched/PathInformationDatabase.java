@@ -46,11 +46,17 @@ public class PathInformationDatabase {
 
     public Set<MyPath> getPathsToServer(FLHost host) {
         Set<MyPath> paths = Optional.ofNullable(CLIENT_TO_SERVER_PATHS.get(host.id())).orElse(Set.of());
+        if (paths.isEmpty()){
+            setPathsToClient(host.id());
+        }
         return paths;
     }
 
     public Set<MyPath> getPathsToClient(FLHost host) {
         Set<MyPath> paths = Optional.ofNullable(SERVER_TO_CLIENT_PATHS.get(host.id())).orElse(Set.of());
+        if (paths.isEmpty()){
+            setPathsToClient(host.id());
+        }
         return paths;
     }
 
