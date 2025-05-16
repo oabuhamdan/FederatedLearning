@@ -7,6 +7,7 @@ import org.onosproject.net.Link;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 import static edu.uta.flowsched.Util.LOG_TIME_FORMATTER;
 
@@ -166,15 +167,15 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
         long tik = System.currentTimeMillis();
         Map<FLHost, Set<MyPath>> clientsPaths = new HashMap<>();
 
-        if (needPhase1Processing.size() < 20) {
+        if (needPhase1Processing.size() < ClientInformationDatabase.INSTANCE.getTotalFLClients() / 2) {
             // Go Greedy if the client's amount is less than 10;
-            HybridCapacityScheduler2.getInstance(this.direction).phase1(phase1Total);
+            super.phase1(phase1Total);
             return;
         }
 
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
-            if (!(clientAlmostDone(client) || Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 1.5)) {
+            if (!(clientAlmostDone(client) || Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2.5)) {
                 Set<MyPath> paths = new HashSet<>(clientPaths.get(client));
                 clientsPaths.put(client, paths);
             }
@@ -218,6 +219,10 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
 
     @Override
     protected HashMap<MyPath, Double> scorePaths(Set<MyPath> paths, boolean initial) {
-        return null;
+        HybridCapacityScheduler2.HybridScoreCompute computer = new HybridCapacityScheduler2.HybridScoreCompute(paths);
+        Function<MyPath, Number> pathScore = computer::computeScore;
+        HashMap<MyPath, Double> pathScores = new HashMap<>();
+        paths.forEach(path -> pathScores.put(path, pathScore.apply(path).doubleValue()));
+        return pathScores;
     }
 }

@@ -60,6 +60,7 @@ public class LinkLatencyProbeComponent {
 
     public void deactivate() {
         probeScheduler.shutdown();
+        probeWorker.shutdown();
         cancelPushPacket();
         packetService.removeProcessor(linkProbeReceiver);
     }

@@ -28,7 +28,7 @@ public class HybridCapacityScheduler2 extends GreedyFlowScheduler {
         return pathScores;
     }
 
-    private static class HybridScoreCompute {
+    public static class HybridScoreCompute {
         private double maxEffectiveScore;
         private double minEffectiveScore;
         private final Map<MyPath, Double> effectiveScore;
