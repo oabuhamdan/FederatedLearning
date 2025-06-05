@@ -240,7 +240,7 @@ public abstract class GreedyFlowScheduler {
                 if (remainingTime < Util.POLL_FREQ || dataRemain <= 5e5) { // 500KB remaining
                     completedClients.add(client);
                     if (!client.clearPath())
-                        phase2Logger.append(String.format("\t\tPhase 2 - Client %s has no current path!\n", client.getFlClientCID()));
+                        phase2Logger.append(String.format("\t\tPhase 2 - Client %s Clearing Path Failed!\n", client.getFlClientCID()));
                     completionTimes.remove(client);
                     dataRemaining.remove(client);
                 } else {

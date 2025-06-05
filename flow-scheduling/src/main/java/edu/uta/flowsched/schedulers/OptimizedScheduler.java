@@ -2,198 +2,399 @@ package edu.uta.flowsched.schedulers;
 
 import com.google.ortools.sat.*;
 import edu.uta.flowsched.*;
+import org.apache.commons.lang3.tuple.Triple;
 import org.onosproject.net.Link;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
+import java.util.logging.Logger;
 
 import static edu.uta.flowsched.Util.LOG_TIME_FORMATTER;
 
+/**
+ * OptimizedScheduler uses a CP-SAT model to minimize the max completion time across clients
+ * by selecting optimal paths for weight distribution in synchronous FL.
+ */
 public class OptimizedScheduler extends GreedyFlowScheduler {
     private static final GreedyFlowScheduler S2C_INSTANCE = new OptimizedScheduler(FlowDirection.S2C);
     private static final GreedyFlowScheduler C2S_INSTANCE = new OptimizedScheduler(FlowDirection.C2S);
 
+    // Small constant for numerical stability when adjusting RTT
+    private static final double EPSILON = 1e-2;
+    // Scaling factor to convert floating-point time to integer for CP-SAT
+    private static final long SCALE = 1_000_000L;
+
+    // Track current assignments to optionally avoid unnecessary changes
+    private final Map<FLHost, MyPath> currentAssignments;
+
+    Set<FLHost> uniqueClients = new HashSet<>();
+
     public static GreedyFlowScheduler getInstance(FlowDirection direction) {
-        return direction.equals(FlowDirection.S2C) ? S2C_INSTANCE : C2S_INSTANCE;
+        return direction == FlowDirection.S2C ? S2C_INSTANCE : C2S_INSTANCE;
     }
 
-    protected OptimizedScheduler(FlowDirection direction) {
+    private OptimizedScheduler(FlowDirection direction) {
         super(direction);
+        this.currentAssignments = new ConcurrentHashMap<>();
     }
 
-    private void precomputePathProperties(Map<FLHost, Set<MyPath>> clientPaths, Set<MyLink> allLinks, Map<String, Double> adjustedRTTMap) {
-        for (Set<MyPath> paths : clientPaths.values()) {
-            for (MyPath path : paths) {
-                double p = path.getPacketLossProbability();
-                double rtt = path.getEffectiveRTT();
-                adjustedRTTMap.put(path.id(), rtt * Math.sqrt(p + 1e-2));
-                path.linksNoEdge().forEach(link -> allLinks.add((MyLink) link));
+    /**
+     * Precomputes adjusted RTT and per-link tau (scaled estimated time) values for all viable paths.
+     *
+     * @param clientPaths     Map from client to its set of candidate paths
+     * @param modelLinks      Output set of all links used by any viable path
+     * @param adjustedRttByPath Output map from path ID to adjusted RTT
+     * @param tauMap          Output map from Triple(clientID, pathID, linkID) to tau
+     * @param dataRemaining   Map from client to bits remaining
+     */
+    private void precomputePathProperties(
+            Map<FLHost, Set<MyPath>> clientPaths,
+            Set<MyLink> modelLinks,
+            Map<String, Double> adjustedRttByPath,
+            Map<Triple<String, String, String>, Long> tauMap,
+            Map<FLHost, Long> dataRemaining) {
+
+        for (Map.Entry<FLHost, Set<MyPath>> entry : clientPaths.entrySet()) {
+            FLHost client = entry.getKey();
+            long bitsRemaining = dataRemaining.getOrDefault(client, 0L);
+            if (bitsRemaining == 0) {
+                continue;
+            }
+            double dataMbit = Util.bitToMbit(bitsRemaining);
+
+            for (MyPath path : entry.getValue()) {
+                                double pathRtt = path.getEffectiveRTT();
+                double pathPLoss = path.getPacketLossProbability();
+                double adjustedRtt = pathRtt * Math.sqrt(pathPLoss + EPSILON);
+
+                boolean computationsOk = true;
+                for (Link rawLink : path.linksNoEdge()) {
+                    MyLink link = (MyLink) rawLink;
+                    double capMbit = Util.bitToMbit(link.getEstimatedFreeCapacity());
+                    if (capMbit <= EPSILON) {
+                        computationsOk = false;
+                        break;
+                    }
+                    long tau = (long) Math.ceil(dataMbit * adjustedRtt * SCALE / capMbit);
+                    if (tau < 0) {
+                        computationsOk = false;
+                        break;
+                    }
+                    tauMap.put(Triple.of(client.getFlClientID(), path.id(), link.id()), tau);
+                    modelLinks.add(link);
+                }
+
+                if (computationsOk) {
+                    adjustedRttByPath.put(path.id(), adjustedRtt);
+                }
             }
         }
     }
 
-    public Map<FLHost, MyPath> optimizePaths(Map<FLHost, Set<MyPath>> clientsPaths, Map<FLHost, Long> dataRemaining, StringBuilder internalLogger) {
+    /**
+     * Builds and solves the CP-SAT model to select one path per client minimizing the max completion time.
+     *
+     * @param clientPaths     Map from client to its set of candidate paths
+     * @param dataRemaining   Map from client to bits remaining
+     * @param logger          Internal logger to collect messages
+     * @param adjustedRttByPath Map from pathID to adjusted RTT
+     * @param tauMap          Map from Triple(clientID,pathID,linkID) to tau
+     * @param modelLinks      Set of all links used in the model
+     * @return A map of clients to selected path, or null if infeasible
+     */
+    private Map<FLHost, MyPath> solveModel(
+            Map<FLHost, Set<MyPath>> clientPaths,
+            Map<FLHost, Long> dataRemaining,
+            StringBuilder logger,
+            Map<String, Double> adjustedRttByPath,
+            Map<Triple<String, String, String>, Long> tauMap,
+            Set<MyLink> modelLinks) {
+
         CpModel model = new CpModel();
+        Map<FLHost, Map<MyPath, BoolVar>> xVars = new HashMap<>();
 
-        Set<MyLink> allLinks = new HashSet<>();
-        Map<String, Double> adjustedRTTMap = new HashMap<>();
-
-        int numClients = clientsPaths.keySet().size();
-        precomputePathProperties(clientsPaths, allLinks, adjustedRTTMap);
-
-        // Variables: x[c][p] = 1 if path p is selected for FLHost c
-        Map<String, Map<String, Literal>> xVars = new HashMap<>();
-        for (FLHost client : clientsPaths.keySet()) {
-            Map<String, Literal> map = new HashMap<>();
-            for (MyPath path : clientsPaths.get(client)) {
-                map.put(path.id(), model.newBoolVar("x_" + client.getFlClientID() + "_" + path.id()));
+        // 1) Create decision variables x[c][p] only for viable paths
+        for (FLHost client : clientPaths.keySet()) {
+            long bits = dataRemaining.getOrDefault(client, 0L);
+            if (bits == 0) {
+                continue; // No data means no decision needed
             }
-            xVars.put(client.getFlClientID(), map);
-        }
-
-        // Variables: active_flows[l] for each link
-        Map<String, IntVar> activeFlows = new HashMap<>();
-        for (MyLink link : allLinks) {
-            activeFlows.put(link.id(), model.newIntVar(0, numClients, "flows_" + link.id()));
-        }
-
-        // Constraint: each client selects exactly one path
-        for (FLHost client : clientsPaths.keySet()) {
-            List<Literal> clientVars = new ArrayList<>();
-            for (MyPath path : clientsPaths.get(client)) {
-                clientVars.add(xVars.get(client.getFlClientID()).get(path.id()));
+            Map<MyPath, BoolVar> pathVars = new HashMap<>();
+            for (MyPath path : clientPaths.get(client)) {
+                if (adjustedRttByPath.containsKey(path.id())) {
+                    String varName = String.format("x_%s_%s", client.getFlClientID(), path.id());
+                    pathVars.put(path, model.newBoolVar(varName));
+                }
             }
-            model.addExactlyOne(clientVars);
+            if (!pathVars.isEmpty()) {
+                xVars.put(client, pathVars);
+            } else {
+                logger.append(String.format("\tWARNING: Client %s has data but no viable paths.\n", client.getFlClientID()));
+            }
         }
 
-        // Constraint: Define active_flows[l]
-        for (MyLink link : allLinks) {
-            List<Literal> flowVars = new ArrayList<>();
-            for (FLHost client : clientsPaths.keySet()) {
-                for (MyPath path : clientsPaths.get(client)) {
-                    if (path.linksNoEdge().contains(link)) {
-                        flowVars.add(xVars.get(client.getFlClientID()).get(path.id()));
+        // 2) For each client, enforce exactly one path selected
+        for (Map.Entry<FLHost, Map<MyPath, BoolVar>> entry : xVars.entrySet()) {
+            Collection<BoolVar> vars = entry.getValue().values();
+            if (!vars.isEmpty()) {
+                // Convert Collection<BoolVar> to array for addExactlyOne
+                BoolVar[] varArray = vars.toArray(new BoolVar[0]);
+                model.addExactlyOne(varArray);
+            }
+        }
+
+        if (xVars.isEmpty() && clientPaths.values().stream().anyMatch(set -> !set.isEmpty())) {
+            logger.append("\tNo variables to optimize but clients have data.\n");
+            return Collections.emptyMap();
+        }
+
+        // 3) ActiveFlows per link
+        Map<MyLink, IntVar> activeFlows = new HashMap<>();
+        for (MyLink link : modelLinks) {
+            List<BoolVar> flowsOnLink = new ArrayList<>();
+            for (Map.Entry<FLHost, Map<MyPath, BoolVar>> entry : xVars.entrySet()) {
+                for (Map.Entry<MyPath, BoolVar> pv : entry.getValue().entrySet()) {
+                    MyPath path = pv.getKey();
+                    if (path.linksNoEdge().stream().anyMatch(l -> ((MyLink) l).id().equals(link.id()))) {
+                        flowsOnLink.add(pv.getValue());
                     }
                 }
             }
-
-            // Sum of all path variables using this link equals the active flows on this link
-            model.addEquality(LinearExpr.sum(flowVars.toArray(new Literal[0])), activeFlows.get(link.id()));
+            IntVar af = model.newIntVar(0, xVars.size(), String.format("ActiveFlows_%s", link.id()));
+            if (flowsOnLink.isEmpty()) {
+                model.addEquality(af, 0);
+            } else {
+                BoolVar[] flowArray = flowsOnLink.toArray(new BoolVar[0]);
+                model.addEquality(af, LinearExpr.sum(flowArray));
+            }
+            activeFlows.put(link, af);
         }
 
-        // Define T (bottleneck) as an integer variable with a large upper bound
-        // Scale floating point values for CP-SAT's integer-only approach
-        long scaleFactor = 1000000; // For precision in integer representation
-        IntVar T = model.newIntVar(0, Long.MAX_VALUE / scaleFactor, "T");
+        // 4) Create T variable (max completion time)
+        long maxTau = tauMap.values().stream().mapToLong(v -> v).max().orElse(0);
+        long Tupper = (maxTau == 0 ? SCALE : maxTau) * (xVars.isEmpty() ? 1 : xVars.size());
+        if (Tupper <= 0) {
+            Tupper = SCALE;
+        }
+        IntVar T = model.newIntVar(0, Tupper, "T");
 
-        // Constraint: For selected paths, ensure bottleneck >= s * adjustedRTT
-        for (FLHost client : clientsPaths.keySet()) {
-            double data = Util.bitToMbit(dataRemaining.get(client));
-            for (MyPath path : clientsPaths.get(client)) {
-                Literal xVar = xVars.get(client.getFlClientID()).get(path.id());
-                double adjRTT = adjustedRTTMap.getOrDefault(path.id(), 1.0);
-                for (Link l : path.linksNoEdge()) {
-                    MyLink link = (MyLink) l;
-                    double capacity = Util.bitToMbit(link.getEstimatedFreeCapacity());
-                    double capEff = capacity / adjRTT;
-
-                    // Scale for integer conversion
-                    long scaledCapEff = (long) (capEff * scaleFactor / data);
-
-                    // Original constraint was:
-                    // activeFlows[link] + T * (-capEff/data) + xVar * numClients <= numClients
-                    // Rearranging: T <= (numClients - activeFlows[link]) * (data/capEff) + numClients * (1-xVar) * (data/capEff)
-                    // We'll implement this using CP-SAT's conditional constraints
-
-                    // First part: When xVar = 1, T must respect the capacity constraint
-                    // We'll use a boolean literal to represent this condition
-                    Literal notXVar = model.newBoolVar("not_" + xVar.toString());
-                    model.addEquality(LinearExpr.sum(new Literal[]{xVar, notXVar}), 1);  // xVar + notXVar = 1
-
-                    // T <= (numClients - activeFlows[link]) * (data/capEff) when xVar = 1
-                    // Otherwise, constraint is satisfied via a large constant
-                    model.addLessOrEqual(
-                            LinearExpr.newBuilder()
-                                    .addTerm(T, 1)
-                                    .addTerm(activeFlows.get(link.id()), scaledCapEff)
-                                    .build(),
-                            LinearExpr.newBuilder()
-                                    .addTerm(notXVar, Long.MAX_VALUE / (2 * scaleFactor))  // Big-M when xVar = 0
-                                    .add(numClients * scaledCapEff)  // numClients * scaledCapEff
-                                    .build()
-                    );
+        // 5) For each client-path-link, enforce T >= tau * ActiveFlows on link if path chosen
+        for (Map.Entry<FLHost, Map<MyPath, BoolVar>> clientEntry : xVars.entrySet()) {
+            String clientId = clientEntry.getKey().getFlClientID();
+            for (Map.Entry<MyPath, BoolVar> pathEntry : clientEntry.getValue().entrySet()) {
+                String pathId = pathEntry.getKey().id();
+                BoolVar xVar = pathEntry.getValue();
+                for (Link rawLink : pathEntry.getKey().linksNoEdge()) {
+                    MyLink link = (MyLink) rawLink;
+                    Long tauVal = tauMap.get(Triple.of(clientId, pathId, link.id()));
+                    if (tauVal == null) {
+                        logger.append(String.format("\tWARNING: Missing tau for %s-%s-%s\n", clientId, pathId, link.id()));
+                        continue;
+                    }
+                    if (tauVal == 0) {
+                        continue;
+                    }
+                    IntVar af = activeFlows.get(link);
+                    if (af == null) {
+                        logger.append(String.format("\tERROR: No activeFlows var for link %s\n", link.id()));
+                        continue;
+                    }
+                    IntVar prod = model.newIntVar(0, Tupper, String.format("prod_%s_%s_%s", clientId, pathId, link.id()));
+                    model.addMultiplicationEquality(prod, af, model.newConstant(tauVal));
+                    model.addGreaterOrEqual(T, prod).onlyEnforceIf(xVar);
                 }
             }
         }
 
-        long tik = System.currentTimeMillis();
+        // 6) Minimize T if there are variables
+        if (!xVars.isEmpty()) {
+            model.minimize(T);
+        } else {
+            logger.append("\tSkipping minimization since no decision vars.\n");
+        }
 
-        // Set objective: minimize T
-        model.minimize(T);
-
-        // Create solver and set parameters
+        // 7) Solve with time and thread limits
         CpSolver solver = new CpSolver();
-        solver.getParameters().setMaxTimeInSeconds(1);
+        solver.getParameters().setMaxTimeInSeconds(10);
         solver.getParameters().setNumWorkers(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
-        // Solve the model
 
+        long startTime = System.currentTimeMillis();
         CpSolverStatus status = solver.solve(model);
+        long duration = System.currentTimeMillis() - startTime;
+        logger.append(String.format("\tSolve time: %d ms, Status: %s\n", duration, status));
 
-        internalLogger.append(String.format("\t Took %s milliseconds to find optimized paths \n", System.currentTimeMillis() - tik));
-        internalLogger.append(String.format("\t Solution Info: %s \n", solver.getSolutionInfo()));
-
-        if (status != CpSolverStatus.OPTIMAL && status != CpSolverStatus.FEASIBLE)
+        if (status != CpSolverStatus.OPTIMAL && status != CpSolverStatus.FEASIBLE) {
             return null;
+        }
+        if (xVars.isEmpty()) {
+            return Collections.emptyMap();
+        }
 
-        // Extract assignment
-        Map<FLHost, MyPath> assignment = new HashMap<>();
-        for (FLHost client : clientsPaths.keySet()) {
-            for (MyPath path : clientsPaths.get(client)) {
-                if (solver.booleanValue(xVars.get(client.getFlClientID()).get(path.id()))) {
-                    assignment.put(client, path);
+        // 8) Extract assignments
+        Map<FLHost, MyPath> solution = new HashMap<>();
+        for (Map.Entry<FLHost, Map<MyPath, BoolVar>> clientEntry : xVars.entrySet()) {
+            for (Map.Entry<MyPath, BoolVar> pv : clientEntry.getValue().entrySet()) {
+                if (solver.booleanValue(pv.getValue())) {
+                    solution.put(clientEntry.getKey(), pv.getKey());
                     break;
                 }
             }
         }
+        return solution;
+    }
 
-        return assignment;
+    /**
+     * Public method to optimize paths, applies threshold-based path switches.
+     */
+    public Map<FLHost, MyPath> optimizePaths(
+            Map<FLHost, Set<MyPath>> clientPaths,
+            Map<FLHost, Long> dataRemaining,
+            StringBuilder logger,
+            Map<FLHost, MyPath> prevAssignments,
+            double threshold) {
+
+        Set<MyLink> modelLinks = new HashSet<>();
+        Map<String, Double> adjustedRttByPath = new HashMap<>();
+        Map<Triple<String, String, String>, Long> tauMap = new HashMap<>();
+
+        precomputePathProperties(clientPaths, modelLinks, adjustedRttByPath, tauMap, dataRemaining);
+        if (adjustedRttByPath.isEmpty() && dataRemaining.values().stream().anyMatch(v -> v > 0)) {
+            logger.append("\tNo viable paths after precompute. Using previous assignments.\n");
+            return new HashMap<>(prevAssignments);
+        }
+
+        Map<FLHost, MyPath> rawSolution = solveModel(
+                clientPaths, dataRemaining, logger, adjustedRttByPath, tauMap, modelLinks);
+        if (rawSolution == null) {
+            logger.append("\tSolver failed. Using previous assignments.\n");
+            return new HashMap<>(prevAssignments);
+        }
+        if (rawSolution.isEmpty() && dataRemaining.values().stream().anyMatch(v -> v > 0)) {
+            logger.append("\tEmpty solver result but data remains. Using previous assignments.\n");
+            return new HashMap<>(prevAssignments);
+        }
+
+        // Compute active flows under optimal solution
+        Map<String, Integer> activeFlowsOpt = computeActiveFlows(rawSolution, modelLinks);
+        Map<FLHost, MyPath> finalAssignments = new HashMap<>();
+
+        for (FLHost client : clientPaths.keySet()) {
+            long bits = dataRemaining.getOrDefault(client, 0L);
+            if (bits == 0) {
+                continue;
+            }
+            MyPath currentPath = prevAssignments.get(client);
+            MyPath candidatePath = rawSolution.get(client);
+            if (candidatePath == null) {
+                // No new path, keep current if exists
+                if (currentPath != null) {
+                    finalAssignments.put(client, currentPath);
+                    logger.append(String.format("\tClient %s: no candidate, keeping current path.\n", client.getFlClientCID()));
+                } else {
+                    logger.append(String.format("\tWARNING: Client %s has no path at all.\n", client.getFlClientCID()));
+                }
+                continue;
+            }
+            if (currentPath == null || candidatePath.id().equals(currentPath.id())) {
+                finalAssignments.put(client, candidatePath);
+                continue;
+            }
+            long perfNew = calculateCompletionTime(client, candidatePath, activeFlowsOpt, dataRemaining, adjustedRttByPath, tauMap);
+            Map<FLHost, MyPath> stayContext = new HashMap<>(rawSolution);
+            stayContext.put(client, currentPath);
+            Map<String, Integer> activeFlowsStay = computeActiveFlows(stayContext, modelLinks);
+            long perfCurrent = calculateCompletionTime(client, currentPath, activeFlowsStay, dataRemaining, adjustedRttByPath, tauMap);
+
+            if (perfNew < perfCurrent * (1 - threshold)) {
+                finalAssignments.put(client, candidatePath);
+                logger.append(String.format("\tClient %s: switching to a new path (newPerf=%d, oldPerf=%d).\n", client.getFlClientCID(), perfNew, perfCurrent));
+            } else {
+                finalAssignments.put(client, currentPath);
+                logger.append(String.format("\tClient %s: keeping current path (newPerf=%d, oldPerf=%d).\n", client.getFlClientCID(), perfNew, perfCurrent));
+            }
+        }
+        return finalAssignments;
+    }
+
+    /**
+     * Computes how many flows traverse each link given a map of assignments.
+     */
+    private Map<String, Integer> computeActiveFlows(
+            Map<FLHost, MyPath> assignments,
+            Set<MyLink> allLinks) {
+        Map<String, Integer> counts = new HashMap<>();
+        for (MyLink link : allLinks) {
+            counts.put(link.id(), 0);
+        }
+        for (MyPath path : assignments.values()) {
+            if (path == null) continue;
+            for (Link rawLink : path.linksNoEdge()) {
+                MyLink link = (MyLink) rawLink;
+                counts.merge(link.id(), 1, Integer::sum);
+            }
+        }
+        return counts;
+    }
+
+    /**
+     * Calculates the (scaled) completion time for a given client-path under the provided active flows.
+     */
+    private long calculateCompletionTime(
+            FLHost client,
+            MyPath path,
+            Map<String, Integer> activeFlows,
+            Map<FLHost, Long> dataRemaining,
+            Map<String, Double> adjustedRttByPath,
+            Map<Triple<String, String, String>, Long> tauMap) {
+        if (!adjustedRttByPath.containsKey(path.id())) {
+            return Long.MAX_VALUE;
+        }
+        long bits = dataRemaining.getOrDefault(client, 0L);
+        if (bits == 0 || path.linksNoEdge().isEmpty()) {
+            return 0L;
+        }
+        long maxTime = 0L;
+        String clientId = client.getFlClientID();
+        for (Link rawLink : path.linksNoEdge()) {
+            MyLink link = (MyLink) rawLink;
+            Long tauVal = tauMap.get(Triple.of(clientId, path.id(), link.id()));
+            if (tauVal == null) {
+                return Long.MAX_VALUE;
+            }
+            int flows = activeFlows.getOrDefault(link.id(), 0);
+            maxTime = Math.max(maxTime, tauVal * flows);
+        }
+        return maxTime;
     }
 
     @Override
-    protected void phase1(AtomicLong phase1Total) {
-        StringBuilder internalLogger = new StringBuilder(String.format("\tPhase 1 -------------%s------------- \n", LocalDateTime.now().format(LOG_TIME_FORMATTER)));
-        long tik = System.currentTimeMillis();
-        Map<FLHost, Set<MyPath>> clientsPaths = new HashMap<>();
-
-        if (needPhase1Processing.size() < ClientInformationDatabase.INSTANCE.getTotalFLClients() / 2) {
-            // Go Greedy if the client's amount is less than 10;
-            super.phase1(phase1Total);
-            return;
-        }
+    protected void phase1(AtomicLong phase1Time) {
+        StringBuilder internalLogger = new StringBuilder(String.format("\tPhase1 %s\n", LocalDateTime.now().format(LOG_TIME_FORMATTER)));
+        long start = System.currentTimeMillis();
+        Map<FLHost, Set<MyPath>> toProcess = new HashMap<>();
 
         FLHost client;
         while ((client = needPhase1Processing.poll()) != null) {
-            if (!(clientAlmostDone(client) || Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2.5)) {
+            if (!(clientAlmostDone(client) || Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2.0)) {
                 Set<MyPath> paths = new HashSet<>(clientPaths.get(client));
-                clientsPaths.put(client, paths);
+                toProcess.put(client, paths);
             }
         }
 
-        Map<FLHost, MyPath> result = optimizePaths(clientsPaths, dataRemaining, internalLogger);
-        if (result == null) {
-            internalLogger.append("\t No result found in this round ... Returning \n");
-            Util.log("greedy" + this.direction, internalLogger.toString());
+
+        Map<FLHost, MyPath> newAssignments = optimizePaths(toProcess, dataRemaining, internalLogger, currentAssignments, 0.25);
+        if (newAssignments.isEmpty()) {
+            internalLogger.append("\tNo new assignments in this round.\n");
+            Util.log("greedy" + direction, internalLogger.toString());
             return;
         }
-        for (Map.Entry<FLHost, MyPath> entry : result.entrySet()) {
+
+        for (Map.Entry<FLHost, MyPath> entry : newAssignments.entrySet()) {
             StringBuilder clientLogger = new StringBuilder();
-
             MyPath currentPath = entry.getKey().getCurrentPath();
-            boolean pathIsNull = currentPath == null;
-
-            if (pathIsNull || !entry.getValue().equals(currentPath)) {
+            if (!entry.getValue().equals(currentPath)) {
                 entry.getKey().setLastPathChange(System.currentTimeMillis());
                 clientLogger.append(String.format("\t- Client %s: \n", entry.getKey().getFlClientCID()));
                 String currentPathFormat = Optional.ofNullable(currentPath).map(MyPath::format).orElse("No Path");
@@ -207,22 +408,24 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
             }
             internalLogger.append(clientLogger);
         }
-        phase1Total.addAndGet(System.currentTimeMillis() - tik);
+        phase1Time.addAndGet(System.currentTimeMillis() - start);
         Util.log("greedy" + this.direction, internalLogger.toString());
+        currentAssignments.putAll(newAssignments);
     }
+
 
     @Override
     public List<FLHost> initialSort(List<FLHost> hosts) {
-        // No sorting here, it doesn't matter.
         return hosts;
     }
 
     @Override
     protected HashMap<MyPath, Double> scorePaths(Set<MyPath> paths, boolean initial) {
-        HybridCapacityScheduler2.HybridScoreCompute computer = new HybridCapacityScheduler2.HybridScoreCompute(paths);
-        Function<MyPath, Number> pathScore = computer::computeScore;
-        HashMap<MyPath, Double> pathScores = new HashMap<>();
-        paths.forEach(path -> pathScores.put(path, pathScore.apply(path).doubleValue()));
-        return pathScores;
+        HybridCapacityScheduler2.HybridScoreCompute scorer = new HybridCapacityScheduler2.HybridScoreCompute(paths);
+        HashMap<MyPath, Double> scores = new HashMap<>();
+        for (MyPath p : paths) {
+            scores.put(p, scorer.computeScore(p).doubleValue());
+        }
+        return scores;
     }
 }
