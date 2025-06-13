@@ -13,6 +13,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
+import static edu.uta.flowsched.schedulers.CONFIGS.PATHS_LIMIT;
+
 public class PathInformationDatabase {
     public static final PathInformationDatabase INSTANCE = new PathInformationDatabase();
     private static ExecutorService executorService;
@@ -45,24 +47,26 @@ public class PathInformationDatabase {
     }
 
     public Set<MyPath> getPathsToServer(FLHost host) {
-        Set<MyPath> paths = Optional.ofNullable(CLIENT_TO_SERVER_PATHS.get(host.id())).orElse(Set.of());
-        if (paths.isEmpty()){
-            setPathsToClient(host.id());
+        if (!CLIENT_TO_SERVER_PATHS.containsKey(host.id())) {
+            setPathsToServer(host.id());
         }
-        return paths;
+        return CLIENT_TO_SERVER_PATHS.get(host.id());
     }
 
     public Set<MyPath> getPathsToClient(FLHost host) {
-        Set<MyPath> paths = Optional.ofNullable(SERVER_TO_CLIENT_PATHS.get(host.id())).orElse(Set.of());
-        if (paths.isEmpty()){
+        if (!SERVER_TO_CLIENT_PATHS.containsKey(host.id())) {
             setPathsToClient(host.id());
         }
-        return paths;
+        return SERVER_TO_CLIENT_PATHS.get(host.id());
+    }
+
+    public Set<MyPath> getPaths(FLHost host, FlowDirection direction) {
+        return FlowDirection.S2C.equals(direction) ? getPathsToClient(host) : getPathsToServer(host);
     }
 
     public void setPathsToServer(HostId hostId) {
         Set<MyPath> paths = Services.pathService.getKShortestPaths(hostId, HostId.hostId(Util.FL_SERVER_MAC))
-                .limit(10).map(MyPath::new)
+                .limit(PATHS_LIMIT).map(MyPath::new)
                 .collect(Collectors.toSet());
 
         PathRulesInstaller.INSTANCE.installPathRules(ClientInformationDatabase.INSTANCE.getHostByHostID(hostId).get(), (Path) paths.toArray()[0], true);
@@ -71,12 +75,13 @@ public class PathInformationDatabase {
 
     public void setPathsToClient(HostId hostId) {
         Set<MyPath> paths = Services.pathService.getKShortestPaths(HostId.hostId(Util.FL_SERVER_MAC), hostId)
-                .limit(10).map(MyPath::new)
+                .limit(PATHS_LIMIT).map(MyPath::new)
                 .collect(Collectors.toSet());
 
         PathRulesInstaller.INSTANCE.installPathRules(ClientInformationDatabase.INSTANCE.getHostByHostID(hostId).get(), (Path) paths.toArray()[0], true);
         SERVER_TO_CLIENT_PATHS.put(hostId, paths);
     }
+
     void printAll() {
         Util.log("paths", "***************Server to Clients Paths***************");
         for (FLHost host : ClientInformationDatabase.INSTANCE.getFLHosts()) {

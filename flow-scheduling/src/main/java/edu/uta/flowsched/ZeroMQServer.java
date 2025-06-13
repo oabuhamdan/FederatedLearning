@@ -1,6 +1,6 @@
 package edu.uta.flowsched;
 
-import edu.uta.flowsched.schedulers.GreedyFlowScheduler;
+import edu.uta.flowsched.schedulers.SmartFlowScheduler;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -75,7 +75,7 @@ public class ZeroMQServer {
 
     private void handleClientToServerPath(String clientID, long time) {
         FLHost host = clientInformationDatabase.getHostByFLCID(clientID);
-        GreedyFlowScheduler.C2S.addClientToQueue(host, pathInformationDatabase.getPathsToServer(host));
+        SmartFlowScheduler.C2S.addClientToQueue(host);
     }
 
     private void handleServerToClientsPaths(JSONArray clients) throws JSONException {
@@ -84,12 +84,8 @@ public class ZeroMQServer {
             hashSet.add(clients.getString(i));
         }
         List<FLHost> hosts = clientInformationDatabase.getHostsByFLIDs(hashSet);
-        hosts = GreedyFlowScheduler.S2C.initialSort(hosts);
-        for (FLHost host : hosts) {
-            GreedyFlowScheduler.S2C.addClientToQueue(host, pathInformationDatabase.getPathsToClient(host));
-        }
-        GreedyFlowScheduler.S2C.startScheduling();
-        GreedyFlowScheduler.C2S.startScheduling();
+        SmartFlowScheduler.S2C.addClientsToQueue(hosts);
+        SmartFlowScheduler.startRound();
     }
 
     void deactivate() {

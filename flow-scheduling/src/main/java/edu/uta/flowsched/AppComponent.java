@@ -15,7 +15,7 @@
  */
 package edu.uta.flowsched;
 
-import edu.uta.flowsched.schedulers.GreedyFlowScheduler;
+import edu.uta.flowsched.schedulers.SmartFlowScheduler;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
@@ -23,10 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
 /**
  * Skeletal ONOS application component.
  */
@@ -36,7 +32,6 @@ import java.util.concurrent.TimeUnit;
         service = {AppComponent.class})
 public class AppComponent {
     private final Logger log = LoggerFactory.getLogger(getClass());
-    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
     @Activate
     protected void activate() {
@@ -47,10 +42,9 @@ public class AppComponent {
         PathInformationDatabase.INSTANCE.activate();
         ClientInformationDatabase.INSTANCE.activate();
         LinkLatencyProbeComponent.INSTANCE.activate();
-        GreedyFlowScheduler.activate();
+        SmartFlowScheduler.activate();
         ZeroMQServer.INSTANCE.activate();
         log.info("Started");
-        executor.scheduleAtFixedRate(Util::flushWriters, 10, 10, TimeUnit.SECONDS);
     }
 
     @Deactivate
@@ -59,10 +53,9 @@ public class AppComponent {
         PathInformationDatabase.INSTANCE.deactivate();
         ZeroMQServer.INSTANCE.deactivate();
         ClientInformationDatabase.INSTANCE.deactivate();
-        GreedyFlowScheduler.deactivate();
+        SmartFlowScheduler.deactivate();
         LinkLatencyProbeComponent.INSTANCE.deactivate();
         Util.closeWriters();
-        executor.shutdownNow();
         log.info("Stopped");
     }
 

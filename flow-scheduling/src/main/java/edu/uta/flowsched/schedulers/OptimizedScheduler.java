@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Logger;
 
 import static edu.uta.flowsched.Util.LOG_TIME_FORMATTER;
 
@@ -17,9 +16,8 @@ import static edu.uta.flowsched.Util.LOG_TIME_FORMATTER;
  * OptimizedScheduler uses a CP-SAT model to minimize the max completion time across clients
  * by selecting optimal paths for weight distribution in synchronous FL.
  */
-public class OptimizedScheduler extends GreedyFlowScheduler {
-    private static final GreedyFlowScheduler S2C_INSTANCE = new OptimizedScheduler(FlowDirection.S2C);
-    private static final GreedyFlowScheduler C2S_INSTANCE = new OptimizedScheduler(FlowDirection.C2S);
+public class OptimizedScheduler extends SmartFlowScheduler {
+    private static SmartFlowScheduler S2C_INSTANCE, C2S_INSTANCE;
 
     // Small constant for numerical stability when adjusting RTT
     private static final double EPSILON = 1e-2;
@@ -31,7 +29,13 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
 
     Set<FLHost> uniqueClients = new HashSet<>();
 
-    public static GreedyFlowScheduler getInstance(FlowDirection direction) {
+    public static SmartFlowScheduler getInstance(FlowDirection direction) {
+        if (S2C_INSTANCE == null) {
+            S2C_INSTANCE = new OptimizedScheduler(FlowDirection.S2C);
+        }
+        if (C2S_INSTANCE == null) {
+            C2S_INSTANCE = new OptimizedScheduler(FlowDirection.C2S);
+        }
         return direction == FlowDirection.S2C ? S2C_INSTANCE : C2S_INSTANCE;
     }
 
@@ -43,11 +47,11 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
     /**
      * Precomputes adjusted RTT and per-link tau (scaled estimated time) values for all viable paths.
      *
-     * @param clientPaths     Map from client to its set of candidate paths
-     * @param modelLinks      Output set of all links used by any viable path
+     * @param clientPaths       Map from client to its set of candidate paths
+     * @param modelLinks        Output set of all links used by any viable path
      * @param adjustedRttByPath Output map from path ID to adjusted RTT
-     * @param tauMap          Output map from Triple(clientID, pathID, linkID) to tau
-     * @param dataRemaining   Map from client to bits remaining
+     * @param tauMap            Output map from Triple(clientID, pathID, linkID) to tau
+     * @param dataRemaining     Map from client to bits remaining
      */
     private void precomputePathProperties(
             Map<FLHost, Set<MyPath>> clientPaths,
@@ -65,7 +69,7 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
             double dataMbit = Util.bitToMbit(bitsRemaining);
 
             for (MyPath path : entry.getValue()) {
-                                double pathRtt = path.getEffectiveRTT();
+                double pathRtt = path.getEffectiveRTT();
                 double pathPLoss = path.getPacketLossProbability();
                 double adjustedRtt = pathRtt * Math.sqrt(pathPLoss + EPSILON);
 
@@ -96,12 +100,12 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
     /**
      * Builds and solves the CP-SAT model to select one path per client minimizing the max completion time.
      *
-     * @param clientPaths     Map from client to its set of candidate paths
-     * @param dataRemaining   Map from client to bits remaining
-     * @param logger          Internal logger to collect messages
+     * @param clientPaths       Map from client to its set of candidate paths
+     * @param dataRemaining     Map from client to bits remaining
+     * @param logger            Internal logger to collect messages
      * @param adjustedRttByPath Map from pathID to adjusted RTT
-     * @param tauMap          Map from Triple(clientID,pathID,linkID) to tau
-     * @param modelLinks      Set of all links used in the model
+     * @param tauMap            Map from Triple(clientID,pathID,linkID) to tau
+     * @param modelLinks        Set of all links used in the model
      * @return A map of clients to selected path, or null if infeasible
      */
     private Map<FLHost, MyPath> solveModel(
@@ -370,21 +374,19 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
     }
 
     @Override
-    protected void phase1(AtomicLong phase1Time) {
+    protected void phase1(ProcessingContext context, AtomicLong phase1Time) {
         StringBuilder internalLogger = new StringBuilder(String.format("\tPhase1 %s\n", LocalDateTime.now().format(LOG_TIME_FORMATTER)));
         long start = System.currentTimeMillis();
         Map<FLHost, Set<MyPath>> toProcess = new HashMap<>();
 
         FLHost client;
-        while ((client = needPhase1Processing.poll()) != null) {
-            if (!(clientAlmostDone(client) || Util.getAgeInSeconds(client.getLastPathChange()) <= Util.POLL_FREQ * 2.0)) {
-                Set<MyPath> paths = new HashSet<>(clientPaths.get(client));
-                toProcess.put(client, paths);
-            }
+        while ((client = context.needPhase1Processing.poll()) != null) {
+            Set<MyPath> paths = new HashSet<>(context.clientPaths.get(client));
+            toProcess.put(client, paths);
         }
 
 
-        Map<FLHost, MyPath> newAssignments = optimizePaths(toProcess, dataRemaining, internalLogger, currentAssignments, 0.25);
+        Map<FLHost, MyPath> newAssignments = optimizePaths(toProcess, context.dataRemaining, internalLogger, currentAssignments, 0.25);
         if (newAssignments.isEmpty()) {
             internalLogger.append("\tNo new assignments in this round.\n");
             Util.log("greedy" + direction, internalLogger.toString());
@@ -404,7 +406,7 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
                 Set<FLHost> affectedClients = entry.getKey().assignNewPath(entry.getValue());
                 clientLogger.append(String.format("\t\tNew Path: %s\n", newPathFormat));
                 // The client is among the affected clients from the addition
-                updateTimeAndRate(affectedClients, internalLogger);
+                updateTimeAndRate(context, affectedClients, internalLogger);
             }
             internalLogger.append(clientLogger);
         }
@@ -414,18 +416,4 @@ public class OptimizedScheduler extends GreedyFlowScheduler {
     }
 
 
-    @Override
-    public List<FLHost> initialSort(List<FLHost> hosts) {
-        return hosts;
-    }
-
-    @Override
-    protected HashMap<MyPath, Double> scorePaths(Set<MyPath> paths, boolean initial) {
-        HybridCapacityScheduler2.HybridScoreCompute scorer = new HybridCapacityScheduler2.HybridScoreCompute(paths);
-        HashMap<MyPath, Double> scores = new HashMap<>();
-        for (MyPath p : paths) {
-            scores.put(p, scorer.computeScore(p).doubleValue());
-        }
-        return scores;
-    }
 }

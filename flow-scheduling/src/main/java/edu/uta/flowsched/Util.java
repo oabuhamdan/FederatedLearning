@@ -2,19 +2,20 @@ package edu.uta.flowsched;
 
 
 import org.onlab.packet.MacAddress;
-import org.onosproject.cfg.ConfigProperty;
+import org.onlab.packet.VlanId;
 import org.onosproject.net.ElementId;
-import org.onosproject.net.Host;
 import org.onosproject.net.HostId;
+import org.onosproject.net.HostLocation;
 import org.onosproject.net.Link;
+import org.onosproject.net.provider.ProviderId;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,7 +27,9 @@ public class Util {
     static final MacAddress FL_SERVER_MAC = MacAddress.valueOf("00:00:00:00:00:FA");
     private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Util.class);
     final static ConcurrentHashMap<String, BufferedWriter> LOGGERS = new ConcurrentHashMap<>();
-        public static DateTimeFormatter LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
+    public static DateTimeFormatter LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
+    public static FLHost POISON_CLIENT = new FLHost(ProviderId.NONE, HostId.NONE, MacAddress.NONE, VlanId.NONE, HostLocation.NONE, Collections.emptySet(), "", "");
+
     public static String formatHostId(ElementId elementId) {
         if (elementId instanceof HostId) {
             HostId dst = (HostId) elementId;
@@ -122,5 +125,11 @@ public class Util {
                 throw new RuntimeException(e);
             }
         });
+    }
+
+    public static String formatMessage(int level, String format, Object... args) {
+        String tabs = "\t".repeat(Math.max(0, level));
+        String message = String.format(format, args);
+        return tabs + message + "\n";
     }
 }
