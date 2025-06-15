@@ -94,12 +94,6 @@
             <artifactId>json</artifactId>
             <version>20240303</version>
         </dependency>
-        <!--        <dependency>-->
-        <!--            <groupId>edu.uta.hpclab</groupId>-->
-        <!--            <artifactId>osama-googleor</artifactId>-->
-        <!--            <version>1.0-SNAPSHOT</version>-->
-        <!--        </dependency>
-        -->
         <dependency>
             <groupId>com.google.ortools</groupId>
             <artifactId>ortools-java</artifactId>
@@ -119,6 +113,23 @@
             <groupId>org.jgrapht</groupId>
             <artifactId>jgrapht-io</artifactId>
             <version>1.5.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.nd4j</groupId>
+            <artifactId>nd4j-api</artifactId>
+            <version>1.0.0-M2.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.nd4j</groupId>
+            <artifactId>nd4j-native</artifactId>
+            <version>1.0.0-M2.1</version> <!-- or your matching version -->
+        </dependency>
+
+        <dependency>
+            <groupId>org.deeplearning4j</groupId>
+            <artifactId>deeplearning4j-core</artifactId>
+            <version>1.0.0-M2.1</version>
         </dependency>
     </dependencies>
 
@@ -145,10 +156,12 @@
                         <Bundle-NativeCode>
                             META-INF/native/libortools.so.9;
                             META-INF/native/libjniortools.so;
+                            META-INF/native/libnd4jcpu.so;
+                            META-INF/native/libjnind4jcpu.so;
                             osname=Linux; processor=x86_64
                         </Bundle-NativeCode>
                         <Include-Resource>
-                            META-INF/native=${project.basedir}/src/main/resources/META-INF/native
+                            META-INF/native=${project.basedir}/src/main/resources/META-INF/native,
                         </Include-Resource>
                         <Import-Package>
                             *;resolution:=optional

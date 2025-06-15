@@ -20,8 +20,10 @@
     <description>ONOS OSGi bundle archetype</description>
     <artifact>mvn:org.zeromq/jeromq/0.6.0</artifact>
     <artifact>mvn:org.json/json/20240303</artifact>
-    <artifact>mvn:com.google.ortools/ortools-java/9.11.4210</artifact>
-    <artifact>mvn:com.google.ortools/ortools-linux-x86-64/9.11.4210</artifact>
-<!--    <artifact>mvn:org.jgrapht/jgrapht-core/1.5.2</artifact>-->
-<!--    <artifact>mvn:org.jgrapht/jgrapht-io/1.5.2</artifact>-->
+
+    <artifact>mvn:org.nd4j/nd4j-native/1.0.0-M2.1</artifact>
+    <!--    <artifact>mvn:com.google.ortools/ortools-java/9.11.4210</artifact>-->
+    <!--    <artifact>mvn:com.google.ortools/ortools-linux-x86-64/9.11.4210</artifact>-->
+    <!--    <artifact>mvn:org.jgrapht/jgrapht-core/1.5.2</artifact>-->
+    <!--    <artifact>mvn:org.jgrapht/jgrapht-io/1.5.2</artifact>-->
 </app>

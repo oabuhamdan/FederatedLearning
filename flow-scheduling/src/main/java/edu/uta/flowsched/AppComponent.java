@@ -37,6 +37,7 @@ public class AppComponent {
     protected void activate() {
         Services.cfgService.setProperty("org.onosproject.provider.of.device.impl.OpenFlowDeviceProvider", "portStatsPollFrequency", System.getenv("POLL_FREQ"));
         OrToolsLoader.INSTANCE.loadNativeLibraries();
+        Nd4jNativeLoader.load();
         createLogDir();
         LinkInformationDatabase.INSTANCE.activate();
         PathInformationDatabase.INSTANCE.activate();

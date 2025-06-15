@@ -20,9 +20,11 @@
         <bundle>wrap:mvn:edu.uta/flow-scheduling/1.0-SNAPSHOT</bundle>
         <bundle>wrap:mvn:org.zeromq/jeromq/0.6.0</bundle>
         <bundle>wrap:mvn:org.json/json/20240303</bundle>
-        <bundle>wrap:mvn:com.google.ortools/ortools-java/9.11.4210</bundle>
-        <bundle>wrap:mvn:com.google.ortools/ortools-linux-x86-64/9.11.4210</bundle>
-        <bundle>wrap:mvn:com.google.protobuf/protobuf-java/4.28.3</bundle>
+
+        <bundle>wrap:mvn:org.nd4j/nd4j-native/1.0.0-M2.1</bundle>
+<!--        <bundle>wrap:mvn:com.google.ortools/ortools-java/9.11.4210</bundle>-->
+<!--        <bundle>wrap:mvn:com.google.ortools/ortools-linux-x86-64/9.11.4210</bundle>-->
+<!--        <bundle>wrap:mvn:com.google.protobuf/protobuf-java/4.28.3</bundle>-->
 <!--        <bundle>wrap:mvn:org.jgrapht/jgrapht-core/1.5.2</bundle>-->
 <!--        <bundle>wrap:mvn:org.jgrapht/jgrapht-io/1.5.2</bundle>-->
     </feature>
