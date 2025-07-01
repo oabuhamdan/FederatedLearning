@@ -41,6 +41,7 @@ public class OptimizedScheduler extends SmartFlowScheduler {
 
     private OptimizedScheduler(FlowDirection direction) {
         super(direction);
+        OrToolsLoader.INSTANCE.loadNativeLibraries();
         this.currentAssignments = new ConcurrentHashMap<>();
     }
 
@@ -386,7 +387,7 @@ public class OptimizedScheduler extends SmartFlowScheduler {
         }
 
 
-        Map<FLHost, MyPath> newAssignments = optimizePaths(toProcess, context.dataRemaining, internalLogger, currentAssignments, 0.25);
+        Map<FLHost, MyPath> newAssignments = optimizePaths(toProcess, context.deltaDataExchanged, internalLogger, currentAssignments, 0.25);
         if (newAssignments.isEmpty()) {
             internalLogger.append("\tNo new assignments in this round.\n");
             Util.log("greedy" + direction, internalLogger.toString());

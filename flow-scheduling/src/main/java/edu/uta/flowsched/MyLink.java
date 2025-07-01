@@ -6,7 +6,6 @@ import org.onosproject.net.provider.ProviderId;
 
 import java.io.Serializable;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -69,9 +68,11 @@ public class MyLink extends DefaultLink implements Serializable {
 //        return Optional.ofNullable(this.packetLoss.peekLast()).orElse(0.0);
         return Util.weightedAverage(this.packetLoss, true);
     }
+
     public void setLatency(int latency) {
         this.latency.add(latency);
     }
+
     public void setPacketLoss(double packetLoss) {
         this.packetLoss.add(packetLoss);
     }
@@ -80,12 +81,12 @@ public class MyLink extends DefaultLink implements Serializable {
         return reservedCapacity.get();
     }
 
-    public void addFlow(FLHost client) {
+    public void addClient(FLHost client) {
         activeFlows.incrementAndGet();
         clientsUsingPath.add(client);
     }
 
-    public void removeFlow(FLHost client) {
+    public void removeClient(FLHost client) {
         if (activeFlows.get() > 0)
             activeFlows.decrementAndGet();
         clientsUsingPath.remove(client);
@@ -122,14 +123,13 @@ public class MyLink extends DefaultLink implements Serializable {
 
     public long getCurrentFairShare() {
         int flows = this.activeFlows.get();
-        return getEstimatedFreeCapacity() / flows;
+        return getEstimatedFreeCapacity() / Math.max(flows, 1);
     }
 
     public long getProjectedFairShare() {
         int flows = this.activeFlows.get() + 1;
         return getEstimatedFreeCapacity() / flows;
     }
-
 
 
     public String format() {

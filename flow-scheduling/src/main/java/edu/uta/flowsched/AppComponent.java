@@ -23,6 +23,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Skeletal ONOS application component.
  */
@@ -32,12 +36,11 @@ import java.io.File;
         service = {AppComponent.class})
 public class AppComponent {
     private final Logger log = LoggerFactory.getLogger(getClass());
+    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
     @Activate
     protected void activate() {
         Services.cfgService.setProperty("org.onosproject.provider.of.device.impl.OpenFlowDeviceProvider", "portStatsPollFrequency", System.getenv("POLL_FREQ"));
-        OrToolsLoader.INSTANCE.loadNativeLibraries();
-        Nd4jNativeLoader.load();
         createLogDir();
         LinkInformationDatabase.INSTANCE.activate();
         PathInformationDatabase.INSTANCE.activate();
@@ -45,6 +48,7 @@ public class AppComponent {
         LinkLatencyProbeComponent.INSTANCE.activate();
         SmartFlowScheduler.activate();
         ZeroMQServer.INSTANCE.activate();
+        executor.scheduleAtFixedRate(Util::flushWriters, 10, 10, TimeUnit.SECONDS);
         log.info("Started");
     }
 

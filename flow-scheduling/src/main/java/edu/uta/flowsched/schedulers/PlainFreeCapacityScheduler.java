@@ -24,7 +24,7 @@ public class PlainFreeCapacityScheduler extends SmartFlowScheduler {
         return direction.equals(FlowDirection.S2C) ? S2C_INSTANCE : C2S_INSTANCE;
     }
 
-    protected HashMap<MyPath, Double> scorePaths(Set<MyPath> paths, boolean initial) {
+    protected HashMap<MyPath, Double> scorePaths(List<MyPath> paths, boolean initial) {
         Function<MyPath, Number> pathScore = path -> path.getBottleneckFreeCap() / 1e6;
         HashMap<MyPath, Double> pathScores = new HashMap<>();
         paths.forEach(path -> pathScores.put(path, pathScore.apply(path).doubleValue()));

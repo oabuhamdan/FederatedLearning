@@ -77,7 +77,7 @@ public class ClientInformationDatabase {
 
     private class PortThroughputWatcher implements DeviceListener {
         AtomicInteger currentCount = new AtomicInteger(0);
-        long threshold = (long) 1e6; // 2Mbps
+        long threshold = (long) 1e5; // 100Kb
         int deviceCount = Services.deviceService.getDeviceCount();
 
         @Override
@@ -111,9 +111,11 @@ public class ClientInformationDatabase {
 
                 if (sentRate > threshold) {
                     flHost.networkStats.setLastPositiveRXRate(sentRate);
+                    flHost.networkStats.setLastPositiveRXData(sentBits);
                 }
                 if (receivedRate > threshold) {
                     flHost.networkStats.setLastPositiveTXRate(receivedRate);
+                    flHost.networkStats.setLastPositiveTXData(receivedBits);
                 }
             });
         }

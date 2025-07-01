@@ -36,8 +36,6 @@ public class PathRulesInstaller {
 
     private FlowRule getFlowEntry(DeviceId dId, FLHost host, PortNumber outPort, PortNumber inPort, Path path, boolean permanent) {
         TrafficTreatment treatment = DefaultTrafficTreatment.builder()
-//                .setIpDscp((byte) DscpClass.EF.getValue())
-//                .setQueue(1)
                 .setOutput(outPort)
                 .build();
 

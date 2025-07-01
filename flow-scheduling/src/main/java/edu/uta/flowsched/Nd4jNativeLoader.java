@@ -1,8 +1,6 @@
 package edu.uta.flowsched;
 
-import org.nd4j.linalg.cpu.nativecpu.CpuBackend;
 import org.nd4j.linalg.factory.Nd4j;
-import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4jBackend;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.FrameworkUtil;

@@ -24,7 +24,7 @@ import java.util.function.Function;
 
 public class Util {
     public static final int POLL_FREQ = Integer.parseInt(System.getenv("POLL_FREQ"));
-    static final MacAddress FL_SERVER_MAC = MacAddress.valueOf("00:00:00:00:00:FA");
+    public static final MacAddress FL_SERVER_MAC = MacAddress.valueOf("00:00:00:00:00:FA");
     private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Util.class);
     final static ConcurrentHashMap<String, BufferedWriter> LOGGERS = new ConcurrentHashMap<>();
     public static DateTimeFormatter LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");

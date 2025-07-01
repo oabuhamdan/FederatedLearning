@@ -31,16 +31,16 @@ public class MyPath extends DefaultPath {
     public Set<FLHost> addClient(FLHost client) {
         Set<FLHost> affectedClients = ConcurrentHashMap.newKeySet();
         linksNoEdge().forEach(link -> {
-            ((MyLink) link).addFlow(client); // Putting it first to calculate it with the affected clients
+            ((MyLink) link).addClient(client); // Putting it first to calculate it with the affected clients
             affectedClients.addAll(((MyLink) link).getClientsUsingLink());
         });
         return affectedClients;
     }
 
-    public Set<FLHost> removeFlow(FLHost client) {
+    public Set<FLHost> removeClient(FLHost client) {
         Set<FLHost> affectedClients = ConcurrentHashMap.newKeySet();
         linksNoEdge().forEach(link -> {
-            ((MyLink) link).removeFlow(client);
+            ((MyLink) link).removeClient(client);
             affectedClients.addAll(((MyLink) link).getClientsUsingLink());
         });
         return affectedClients;

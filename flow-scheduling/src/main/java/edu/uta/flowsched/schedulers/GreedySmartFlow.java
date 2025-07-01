@@ -2,6 +2,7 @@ package edu.uta.flowsched.schedulers;
 
 import edu.uta.flowsched.*;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -28,11 +29,10 @@ public class GreedySmartFlow extends SmartFlowScheduler {
 
     @Override
     protected void phase1(ProcessingContext context, AtomicLong phase1Total) throws InterruptedException {
-        StringBuilder phase1Logger = new StringBuilder(formatMessage(0, "Phase 1:"));
+        StringBuilder phase1Logger = new StringBuilder(formatMessage(0, "Phase 1 at %s:", LocalDateTime.now().format(Util.LOG_TIME_FORMATTER)));
         FLHost client = context.needPhase1Processing.take(); // Will wait until there is a client available
         if (client.equals(POISON_CLIENT)) return;
-        long tik = System.currentTimeMillis();
-        int processed = 0;
+        long tic = System.currentTimeMillis();
         while (client != null) { // Will loop over all the available clients
             StringBuilder clientLogger = new StringBuilder(formatMessage(1, "- Client %s:", client.getFlClientCID()));
             try {
@@ -47,7 +47,6 @@ public class GreedySmartFlow extends SmartFlowScheduler {
 
                 GreedyScoreCompute scorer = new GreedyScoreCompute(paths);
                 if (shouldSwitchPath(currentPath, scorer, clientLogger)) {
-                    client.setLastPathChange(System.currentTimeMillis());
                     String currentPathFormat = Optional.ofNullable(currentPath).map(MyPath::format).orElse("No Path");
                     clientLogger.append(formatMessage(2, "- Current Path: %s", currentPathFormat));
                     PathRulesInstaller.INSTANCE.installPathRules(client, scorer.highestScorePath, false);
@@ -58,16 +57,14 @@ public class GreedySmartFlow extends SmartFlowScheduler {
                 context.needPhase2Processing.add(client);
                 phase1Logger.append(clientLogger);
                 client = context.needPhase1Processing.poll();
-                processed++;
             } catch (Exception e) {
                 String trace = e.getMessage() + "; " + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray());
                 clientLogger.append(formatMessage(2, "ERROR: %s ", trace));
             }
         }
 
-        phase1Total.addAndGet(System.currentTimeMillis() - tik);
+        phase1Total.addAndGet(System.currentTimeMillis() - tic);
         Util.log("smartflow" + this.direction, phase1Logger.toString());
-        Util.log("smartflow" + this.direction, formatMessage(1, "Processed %s Cleints in Phase 1", processed));
     }
 
     private boolean shouldSwitchPath(MyPath currentPath, GreedyScoreCompute scorer, StringBuilder clientLogger) {
@@ -89,34 +86,46 @@ public class GreedySmartFlow extends SmartFlowScheduler {
     @Override
     public void initialSort(ProcessingContext context, List<FLHost> clients) {
         clients.sort(Comparator.comparing(c -> {
-            GreedyScoreCompute scorer = new GreedyScoreCompute(context.clientPaths.get(c));
-            return scorer.getScore(scorer.getHighestScoredPath());
+            try {
+                GreedyScoreCompute scorer = new GreedyScoreCompute(context.clientPaths.get(c));
+                return scorer.getScore(scorer.getHighestScoredPath());
+            } catch (Exception e) {
+                String trace = e.getMessage() + "; " + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray());
+                Util.log("general", formatMessage(2, "ERROR: %s ", trace));
+            }
+            return 0.0;
         }));
     }
 
     public static class GreedyScoreCompute {
-        private final Map<MyPath, Double> pathScores;
-        private final MyPath highestScorePath;
+        private Map<MyPath, Double> pathScores;
+        private MyPath highestScorePath;
 
         public GreedyScoreCompute(Collection<MyPath> paths) {
             this.pathScores = new HashMap<>();
             double minEffectiveScore = Double.MAX_VALUE;
             double maxEffectiveScore = Double.MIN_VALUE;
             Map<MyPath, Double> rawScores = new HashMap<>();
-            for (MyPath path : paths) {
-                double score = path.effectiveScore();
-                rawScores.put(path, score);
-                minEffectiveScore = Math.min(minEffectiveScore, score);
-                maxEffectiveScore = Math.max(maxEffectiveScore, score);
+            this.highestScorePath = null;
+            try {
+                for (MyPath path : paths) {
+                    double score = path.effectiveScore();
+                    rawScores.put(path, score);
+                    minEffectiveScore = Math.min(minEffectiveScore, score);
+                    maxEffectiveScore = Math.max(maxEffectiveScore, score);
+                }
+                for (Map.Entry<MyPath, Double> entry : rawScores.entrySet()) {
+                    double normalized = normalize(entry.getValue(), minEffectiveScore, maxEffectiveScore);
+                    pathScores.put(entry.getKey(), normalized);
+                }
+                this.highestScorePath = pathScores.entrySet().stream()
+                        .max(Map.Entry.comparingByValue())
+                        .orElseThrow(() -> new IllegalStateException("No paths available"))
+                        .getKey();
+            } catch (Exception e) {
+                String trace = e.getMessage() + "; " + Arrays.toString(Arrays.stream(e.getStackTrace()).toArray());
+                Util.log("general", formatMessage(2, "ERROR: %s ", trace));
             }
-            for (Map.Entry<MyPath, Double> entry : rawScores.entrySet()) {
-                double normalized = normalize(entry.getValue(), minEffectiveScore, maxEffectiveScore);
-                pathScores.put(entry.getKey(), normalized);
-            }
-            this.highestScorePath = pathScores.entrySet().stream()
-                    .max(Map.Entry.comparingByValue())
-                    .orElseThrow(() -> new IllegalStateException("No paths available"))
-                    .getKey();
         }
 
         public double getScore(MyPath path) {

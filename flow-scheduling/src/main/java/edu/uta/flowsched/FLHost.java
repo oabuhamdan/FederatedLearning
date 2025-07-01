@@ -15,9 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static edu.uta.flowsched.schedulers.CONFIGS.ALMOST_DONE_DATA_THRESH;
-import static edu.uta.flowsched.schedulers.CONFIGS.DATA_SIZE;
-
 public class FLHost extends DefaultHost {
     private String flClientID;
     private String flClientCID;
@@ -85,7 +82,8 @@ public class FLHost extends DefaultHost {
     public Set<FLHost> assignNewPath(MyPath newPath) {
         Set<FLHost> affectedClients = ConcurrentHashMap.newKeySet();
         if (this.currentPath != null)
-            affectedClients.addAll(currentPath.removeFlow(this));
+            affectedClients.addAll(currentPath.removeClient(this));
+        setLastPathChange(System.currentTimeMillis());
         setCurrentPath(newPath);
         affectedClients.addAll(newPath.addClient(this));
         return affectedClients;
@@ -95,19 +93,17 @@ public class FLHost extends DefaultHost {
         if (this.currentPath == null) {
             return false;
         }
-        currentPath.removeFlow(this);
+        currentPath.removeClient(this);
         setCurrentPath(null);
         return true;
-    }
-
-    public boolean isAlmostDone(FlowDirection direction){
-        long dataRemain = DATA_SIZE - networkStats.getRoundExchangedData(direction);
-        return dataRemain <= ALMOST_DONE_DATA_THRESH;
     }
 
     public static class NetworkStats {
         private final BoundedConcurrentLinkedQueue<Long> lastPositiveTXRate;
         private final BoundedConcurrentLinkedQueue<Long> lastPositiveRXRate;
+
+        private final BoundedConcurrentLinkedQueue<Long> lastPositiveTXData;
+        private final BoundedConcurrentLinkedQueue<Long> lastPositiveRXData;
         private final BoundedConcurrentLinkedQueue<Long> lastTXRate;
         private final BoundedConcurrentLinkedQueue<Long> lastRXRate;
         private final AtomicLong roundSentData;
@@ -116,6 +112,8 @@ public class FLHost extends DefaultHost {
         public NetworkStats() {
             this.lastTXRate = new BoundedConcurrentLinkedQueue<>(3);
             this.lastRXRate = new BoundedConcurrentLinkedQueue<>(3);
+            this.lastPositiveTXData = new BoundedConcurrentLinkedQueue<>(3);
+            this.lastPositiveRXData = new BoundedConcurrentLinkedQueue<>(3);
             this.lastPositiveTXRate = new BoundedConcurrentLinkedQueue<>(3);
             this.lastPositiveRXRate = new BoundedConcurrentLinkedQueue<>(3);
             this.roundSentData = new AtomicLong(0);
@@ -128,6 +126,19 @@ public class FLHost extends DefaultHost {
 
         public long getLastPositiveRXRate() {
             return Optional.ofNullable(this.lastPositiveRXRate.peekLast()).orElse(0L);
+        }
+
+
+        public long getLastPositiveTXData() {
+            return Optional.ofNullable(this.lastPositiveTXData.peekLast()).orElse(0L);
+        }
+
+        public long getLastPositiveRXData() {
+            return Optional.ofNullable(this.lastPositiveRXData.peekLast()).orElse(0L);
+        }
+
+        public long getLastPositiveData(FlowDirection direction) {
+            return direction.equals(FlowDirection.S2C) ? this.getLastPositiveRXData() : this.getLastPositiveTXData();
         }
 
         public long getLastRate(FlowDirection direction) {
@@ -158,6 +169,15 @@ public class FLHost extends DefaultHost {
 
         public void setLastPositiveRXRate(long lastPositiveRXRate) {
             this.lastPositiveRXRate.add(lastPositiveRXRate);
+        }
+
+
+        public void setLastPositiveTXData(long lastPositiveTXData) {
+            this.lastPositiveTXData.add(lastPositiveTXData);
+        }
+
+        public void setLastPositiveRXData(long lastPositiveRXData) {
+            this.lastPositiveRXData.add(lastPositiveRXData);
         }
 
         public void setLastTXRate(long lastTXRate) {

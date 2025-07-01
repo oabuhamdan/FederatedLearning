@@ -1,7 +1,5 @@
 package edu.uta.flowsched;
 
-import org.onosproject.net.Path;
-
 import java.util.LinkedList;
 import java.util.List;
 
